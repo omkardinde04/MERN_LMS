@@ -56,9 +56,8 @@ export default function SettingsPage() {
     };
 
     const handleRemoveAvatar = () => {
-        const defaultAvatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.fullName}`;
-        setAvatar(defaultAvatar);
-        const updatedUser = { ...user, avatar: defaultAvatar };
+        setAvatar(null);
+        const updatedUser = { ...user, avatar: null };
         setUser(updatedUser);
         toast.success('Profile picture removed');
     };

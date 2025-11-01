@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { getLocalData, setLocalData } from '@/utils/storage';
 import { MessageSquare, Trash2, Star, Upload, FileText, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -18,6 +19,8 @@ export default function FeedbackPage() {
     const [comment, setComment] = useState('');
     const [selectedFile, setSelectedFile] = useState(null);
     const [fileName, setFileName] = useState('');
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [feedbackToDelete, setFeedbackToDelete] = useState(null);
 
     const handleFileChange = (e) => {
         const file = e.target.files[0];
@@ -73,6 +76,13 @@ export default function FeedbackPage() {
         setFeedbackList(updated);
         setLocalData('feedback', updated);
         toast.success('Feedback deleted');
+        setDeleteDialogOpen(false);
+        setFeedbackToDelete(null);
+    };
+
+    const openDeleteDialog = (feedback) => {
+        setFeedbackToDelete(feedback);
+        setDeleteDialogOpen(true);
     };
 
     return (
@@ -207,8 +217,8 @@ export default function FeedbackPage() {
                                                         <Star
                                                             key={i}
                                                             className={`h-4 w-4 ${i < feedback.rating
-                                                                    ? 'fill-primary text-primary'
-                                                                    : 'text-muted-foreground'
+                                                                ? 'fill-primary text-primary'
+                                                                : 'text-muted-foreground'
                                                                 }`}
                                                         />
                                                     ))}
@@ -217,7 +227,7 @@ export default function FeedbackPage() {
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
-                                                onClick={() => handleDelete(feedback.id)}
+                                                onClick={() => openDeleteDialog(feedback)}
                                                 className="text-destructive hover:text-destructive"
                                             >
                                                 <Trash2 className="h-4 w-4" />
@@ -247,6 +257,24 @@ export default function FeedbackPage() {
                     </Card>
                 </motion.div>
             </div>
+
+            {/* Delete Confirmation Dialog */}
+            <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Feedback</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to delete this feedback? This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => setDeleteDialogOpen(false)}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => handleDelete(feedbackToDelete?.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                            Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

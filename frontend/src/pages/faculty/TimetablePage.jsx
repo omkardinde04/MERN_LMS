@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { getLocalData, setLocalData } from '@/utils/storage';
 import { Plus, Edit, Trash2, Calendar, Clock } from 'lucide-react';
 import { toast } from 'sonner';
@@ -27,6 +28,8 @@ export default function TimetablePage() {
     const [courses] = useState(getLocalData('courses', []));
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [editingSlot, setEditingSlot] = useState(null);
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [slotToDelete, setSlotToDelete] = useState(null);
     const [formData, setFormData] = useState({
         courseName: '',
         courseCode: '',
@@ -90,6 +93,13 @@ export default function TimetablePage() {
         setTimetable(updatedTimetable);
         setLocalData('timetable', updatedTimetable);
         toast.success('Class removed from schedule');
+        setDeleteDialogOpen(false);
+        setSlotToDelete(null);
+    };
+
+    const openDeleteDialog = (slot) => {
+        setSlotToDelete(slot);
+        setDeleteDialogOpen(true);
     };
 
     const getClassesForDayAndTime = (day, time) => {
@@ -269,7 +279,7 @@ export default function TimetablePage() {
                                                                         variant="ghost"
                                                                         size="icon"
                                                                         className="h-6 w-6"
-                                                                        onClick={() => handleDelete(cls.id)}
+                                                                        onClick={() => openDeleteDialog(cls)}
                                                                     >
                                                                         <Trash2 className="h-3 w-3 text-destructive" />
                                                                     </Button>
@@ -301,6 +311,24 @@ export default function TimetablePage() {
                     </Button>
                 </Card>
             )}
+
+            {/* Delete Confirmation Dialog */}
+            <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Remove Class</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to remove "{slotToDelete?.courseName}" from the timetable? This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => setDeleteDialogOpen(false)}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => handleDelete(slotToDelete?.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                            Remove
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

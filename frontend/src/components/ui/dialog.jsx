@@ -21,8 +21,7 @@ const DialogContent = React.forwardRef(({ className, children, onClose, ...props
     <div
         ref={ref}
         className={cn(
-            // Removed "grid" and "gap-4" from here
-            "fixed left-[50%] top-[50%] z-50 w-full max-w-lg translate-x-[-50%] translate-y-[-50%] border bg-background p-6 shadow-lg duration-200 sm:rounded-lg",
+            "fixed left-[50%] top-[50%] z-50 w-full max-w-lg translate-x-[-50%] translate-y-[-50%] border bg-background p-6 shadow-lg duration-200 sm:rounded-lg flex flex-col",
             className
         )}
         {...props}
@@ -42,7 +41,7 @@ DialogContent.displayName = "DialogContent";
 const DialogHeader = ({ className, ...props }) => (
     <div
         className={cn(
-            "flex flex-col space-y-1.5 text-center sm:text-left",
+            "flex flex-col space-y-1.5 text-center sm:text-left mb-4",
             className
         )}
         {...props}
@@ -53,7 +52,7 @@ DialogHeader.displayName = "DialogHeader";
 const DialogFooter = ({ className, ...props }) => (
     <div
         className={cn(
-            "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2",
+            "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 mt-4",
             className
         )}
         {...props}

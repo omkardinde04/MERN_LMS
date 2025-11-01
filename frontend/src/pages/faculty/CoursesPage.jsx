@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { getLocalData, setLocalData } from '@/utils/storage';
 import { Plus, Edit, Trash2, Users, BookOpen, Clock, Link as LinkIcon, Video, Bell, ArrowLeft, Copy, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
@@ -16,6 +17,8 @@ export default function CoursesPage() {
     const [selectedCourse, setSelectedCourse] = useState(null);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [editingCourse, setEditingCourse] = useState(null);
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [courseToDelete, setCourseToDelete] = useState(null);
     const [formData, setFormData] = useState({
         name: '',
         code: '',
@@ -90,6 +93,14 @@ export default function CoursesPage() {
         setCourses(updatedCourses);
         setLocalData('courses', updatedCourses);
         toast.success('Course deleted successfully');
+        setDeleteDialogOpen(false);
+        setCourseToDelete(null);
+    };
+
+    const openDeleteDialog = (course, event) => {
+        event.stopPropagation();
+        setCourseToDelete(course);
+        setDeleteDialogOpen(true);
     };
 
     const handleShareLink = (course) => {
@@ -561,7 +572,7 @@ export default function CoursesPage() {
                                         <Button
                                             variant="ghost"
                                             size="icon"
-                                            onClick={() => handleDelete(course.id)}
+                                            onClick={(e) => openDeleteDialog(course, e)}
                                         >
                                             <Trash2 className="h-4 w-4 text-destructive" />
                                         </Button>
@@ -623,6 +634,24 @@ export default function CoursesPage() {
                     </Button>
                 </Card>
             )}
+
+            {/* Delete Confirmation Dialog */}
+            <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Course</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to delete "{courseToDelete?.name}"? This action cannot be undone and will remove all associated data.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => setDeleteDialogOpen(false)}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => handleDelete(courseToDelete?.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                            Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

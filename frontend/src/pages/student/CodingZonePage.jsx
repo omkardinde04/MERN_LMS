@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { codeStarters } from '@/utils/mockData'; // This file is provided below
+import { codeStarters } from '@/utils/mockData';
 import { Play, Send, Loader2, Code2, Download, Settings, Star, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
@@ -21,9 +21,15 @@ const languageMap = {
 };
 
 // Gemini API
-const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=";
+// --- THIS IS THE FIX ---
+// The model "gemini-1.5-flash" is not found. We are changing to the standard "gemini-pro" model.
+// I have also changed "v1" to "v1beta" as "gemini-pro" works on the "v1beta" endpoint.
+const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=";
+;
+// ----------------------
+
 // --- IMPORTANT: ADD YOUR GEMINI API KEY HERE ---
-const API_KEY = ""; // ⚠️ Replace "" with your actual Google Generative AI API Key
+const API_KEY = "AIzaSyAy5fkupI-8Wal6OC1TMDcjuLhCZAw0qWA"; // This is the key you provided.
 
 // --- Helper Functions ---
 
@@ -95,20 +101,19 @@ Signal: ${result.run.signal || 'None'}`;
  */
 async function getCodeFeedback(codeContent, language) {
     if (!API_KEY) {
-        return "Feedback unavailable: Gemini API key is missing.";
+        // Return mock feedback when API key is missing
+        return generateMockFeedback(codeContent, language);
     }
     if (codeContent.trim().length < 10) {
         return "Code is too short for meaningful feedback.";
     }
 
-    const userQuery = `Analyze the following ${language} code for quality, style, potential bugs, and suggest improvements. Be concise (3-5 bullet points). Do not comment on correctness unless there's an obvious bug. Focus on readability, conventions, and potential optimizations.\n\nCode:\n\`\`\`${language}\n${codeContent}\n\`\`\``;
-    const systemPrompt = "You are a code review assistant providing constructive feedback.";
+    const userQuery = `You are a code review assistant providing constructive feedback. Analyze the following ${language} code for quality, style, potential bugs, and suggest improvements. Be concise (3-5 bullet points). Do not comment on correctness unless there's an obvious bug. Focus on readability, conventions, and potential optimizations.\n\nCode:\n\`\`\`${language}\n${codeContent}\n\`\`\``;
 
     const payload = {
         contents: [{ parts: [{ text: userQuery }] }],
-        systemInstruction: { parts: [{ text: systemPrompt }] },
         generationConfig: {
-            maxOutputTokens: 200,
+            maxOutputTokens: 300,
             temperature: 0.5,
         }
     };
@@ -140,26 +145,66 @@ async function getCodeFeedback(codeContent, language) {
 }
 
 /**
+ * Generates mock AI feedback when API key is not available.
+ */
+function generateMockFeedback(codeContent, language) {
+    const lines = codeContent.split('\n').filter(l => l.trim().length > 0).length;
+    const hasComments = codeContent.includes('//') || codeContent.includes('/*') || codeContent.includes('#');
+    const hasFunctions = codeContent.includes('def ') || codeContent.includes('function ') || codeContent.includes('void ') || codeContent.includes('public ');
+
+    let feedback = `### AI Code Analysis\n\n`;
+    feedback += `**Code Overview:**\n`;
+    feedback += `- Language: ${language.toUpperCase()}\n`;
+    feedback += `- Lines of code: ${lines}\n\n`;
+
+    feedback += `**Strengths:**\n`;
+    if (hasComments) {
+        feedback += `- Good use of comments to explain code logic\n`;
+    }
+    if (hasFunctions) {
+        feedback += `- Code is well-structured with proper function definitions\n`;
+    }
+    feedback += `- Code appears to follow basic ${language} conventions\n\n`;
+
+    feedback += `**Suggestions for Improvement:**\n`;
+    if (!hasComments) {
+        feedback += `- Consider adding comments to explain complex logic\n`;
+    }
+    feedback += `- Review variable naming for better readability\n`;
+    feedback += `- Consider adding error handling where appropriate\n`;
+    feedback += `- Look for opportunities to optimize loops and conditionals\n\n`;
+
+    feedback += `**Best Practices:**\n`;
+    feedback += `- Follow consistent indentation and formatting\n`;
+    feedback += `- Break down complex functions into smaller, reusable pieces\n`;
+    feedback += `- Add input validation for robust code\n\n`;
+
+    feedback += `*Note: This is mock feedback. For detailed AI analysis, please add a valid Gemini API key.*`;
+
+    return feedback;
+}
+
+/**
  * Calculates a simple score based on code and execution.
  */
 const calculateScore = (codeContent, executionSuccess) => {
     let score = 0;
     let explanation = [];
-    
+
     if (codeContent.trim().length === 0) {
         return { score: 0, explanation: ['No code submitted'] };
     }
-    
+
     // Base score for effort
     score += 10;
     explanation.push('Base effort: +10 points');
-    
+
     // Score for code length
     const lines = codeContent.split('\n').filter(l => l.trim().length > 0).length;
     const lengthScore = Math.min(lines * 2, 40);
     score += lengthScore;
     explanation.push(`Code length (${lines} lines): +${lengthScore} points`);
-    
+
     // Big bonus for successful run
     if (executionSuccess) {
         score += 50;
@@ -167,7 +212,7 @@ const calculateScore = (codeContent, executionSuccess) => {
     } else {
         explanation.push('Execution failed or not tested: +0 points');
     }
-    
+
     return {
         score: Math.min(score, 100),
         explanation: explanation

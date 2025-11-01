@@ -105,8 +105,8 @@ export default function Login() {
     return (
         <div className="min-h-screen flex">
             {/* Left side - Yellow branding */}
-            <div className="hidden lg:flex lg:w-1/2 bg-primary p-12 flex-col justify-between text-primary-foreground">
-                <div>
+            <div className="hidden lg:flex lg:w-1/2 bg-primary p-12 flex-col justify-center text-primary-foreground">
+                <div className="flex flex-col items-center">
                     <motion.div
                         initial={{ opacity: 0, y: -20 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -115,6 +115,9 @@ export default function Login() {
                     >
                         <span className="text-5xl font-bold text-primary">L</span>
                     </motion.div>
+                </div>
+                <div className="w-full flex flex-col items-start">
+                    
 
                     <motion.h1
                         initial={{ opacity: 0, x: -20 }}
@@ -173,7 +176,7 @@ export default function Login() {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.5 }}
                     >
-                        <Card className="border-0 shadow-none bg-transparent">
+                        <Card className="border-0 shadow-none bg-transparent px-8 py-6">
                             <CardHeader className="space-y-2 px-0">
                                 <CardTitle className="text-3xl font-bold text-black">Sign In</CardTitle>
                                 <CardDescription className="text-base text-muted-foreground">

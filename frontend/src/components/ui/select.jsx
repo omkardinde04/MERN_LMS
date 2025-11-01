@@ -1,16 +1,19 @@
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { ChevronDown } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
 const Select = ({ value, onValueChange, children }) => {
     const [open, setOpen] = React.useState(false);
-    const selectRef = React.useRef(null);
+    const triggerRef = React.useRef(null);
+    const contentRef = React.useRef(null);
 
     // Close dropdown when clicking outside
     React.useEffect(() => {
         const handleClickOutside = (event) => {
-            if (selectRef.current && !selectRef.current.contains(event.target)) {
+            if (!triggerRef.current?.contains(event.target) &&
+                !contentRef.current?.contains(event.target)) {
                 setOpen(false);
             }
         };
@@ -22,13 +25,23 @@ const Select = ({ value, onValueChange, children }) => {
     }, [open]);
 
     return (
-        <div className="relative" ref={selectRef}>
+        <div className="relative">
             {React.Children.map(children, child => {
                 if (child.type === SelectTrigger) {
-                    return React.cloneElement(child, { onClick: () => setOpen(!open), value });
+                    return React.cloneElement(child, {
+                        onClick: () => setOpen(!open),
+                        value,
+                        ref: triggerRef
+                    });
                 }
                 if (child.type === SelectContent) {
-                    return open ? React.cloneElement(child, { onValueChange, setOpen, value }) : null;
+                    return open ? React.cloneElement(child, {
+                        onValueChange,
+                        setOpen,
+                        value,
+                        triggerRef,
+                        ref: contentRef
+                    }) : null;
                 }
                 return child;
             })}
@@ -62,57 +75,62 @@ const SelectTrigger = React.forwardRef(({ className, children, value, onClick, .
 });
 SelectTrigger.displayName = "SelectTrigger";
 
-const SelectContent = ({ className, children, onValueChange, setOpen, value, ...props }) => {
-    const contentRef = React.useRef(null);
-    const [position, setPosition] = React.useState({ vertical: 'bottom', maxHeight: '300px' });
+const SelectContent = React.forwardRef(({ className, children, onValueChange, setOpen, value, triggerRef, ...props }, ref) => {
+    const [coords, setCoords] = React.useState({ top: 0, left: 0, width: 0 });
+
+    const updatePosition = React.useCallback(() => {
+        if (!triggerRef?.current) return;
+        const rect = triggerRef.current.getBoundingClientRect();
+        setCoords({
+            top: rect.bottom + window.scrollY,
+            left: rect.left + window.scrollX,
+            width: rect.width
+        });
+    }, [triggerRef]);
 
     React.useEffect(() => {
-        if (contentRef.current) {
-            const rect = contentRef.current.getBoundingClientRect();
-            const viewportHeight = window.innerHeight;
-            const spaceBelow = viewportHeight - rect.bottom;
-            const spaceAbove = rect.top;
+        updatePosition();
+        window.addEventListener('scroll', updatePosition, true);
+        window.addEventListener('resize', updatePosition);
+        return () => {
+            window.removeEventListener('scroll', updatePosition, true);
+            window.removeEventListener('resize', updatePosition);
+        };
+    }, [updatePosition]);
 
-            let vertical = 'bottom';
-            let maxHeight = '300px';
-
-            // Calculate available space and position
-            if (spaceBelow < 200 && spaceAbove > spaceBelow) {
-                vertical = 'top';
-                maxHeight = `${Math.min(spaceAbove - 20, 300)}px`;
-            } else {
-                maxHeight = `${Math.min(spaceBelow - 20, 300)}px`;
-            }
-
-            setPosition({ vertical, maxHeight });
-        }
-    }, []);
-
-    return (
+    const content = (
         <div
-            ref={contentRef}
+            ref={ref}
+            style={{
+                position: 'absolute',
+                top: coords.top + 5,
+                left: coords.left,
+                width: coords.width,
+                zIndex: 9999
+            }}
             className={cn(
-                "absolute z-[100] w-full overflow-auto rounded-md border bg-popover text-popover-foreground shadow-lg",
-                position.vertical === 'top' ? 'bottom-full mb-1' : 'top-full mt-1',
+                "rounded-md border bg-popover text-popover-foreground shadow-md",
+                "animate-in fade-in-0 zoom-in-95",
                 className
             )}
-            style={{ maxHeight: position.maxHeight }}
             {...props}
         >
-            <div className="bg-background border border-border rounded-md">
+            <div className="overflow-y-auto max-h-[300px]">
                 {React.Children.map(children, child =>
                     React.cloneElement(child, { onValueChange, setOpen, currentValue: value })
                 )}
             </div>
         </div>
     );
-};
+
+    return createPortal(content, document.body);
+});
 SelectContent.displayName = "SelectContent";
 
 const SelectItem = React.forwardRef(({ className, children, value, onValueChange, setOpen, currentValue, ...props }, ref) => {
     // Filter out non-native props before spreading
     const { onValueChange: _, setOpen: __, currentValue: ___, ...nativeProps } = props;
-    
+
     return (
         <div
             ref={ref}
@@ -137,7 +155,7 @@ SelectItem.displayName = "SelectItem";
 
 const SelectValue = ({ placeholder, currentValue, children }) => {
     // Display the current value if it exists, otherwise show placeholder or children
-    if (currentValue) {
+    if (currentValue !== undefined && currentValue !== null && currentValue !== '') {
         return <span>{currentValue}</span>;
     }
     if (children) {
