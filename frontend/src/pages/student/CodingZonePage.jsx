@@ -144,28 +144,64 @@ async function getCodeFeedback(codeContent, language) {
  */
 const calculateScore = (codeContent, executionSuccess) => {
     let score = 0;
-    if (codeContent.trim().length === 0) return 0;
-    score += 10; // Base score for effort
-    const lines = codeContent.split('\n').length;
-    score += Math.min(lines * 2, 40); // Score for length
-    if (executionSuccess) { score += 50; } // Big bonus for successful run
-    return Math.min(score, 100);
+    let explanation = [];
+    
+    if (codeContent.trim().length === 0) {
+        return { score: 0, explanation: ['No code submitted'] };
+    }
+    
+    // Base score for effort
+    score += 10;
+    explanation.push('Base effort: +10 points');
+    
+    // Score for code length
+    const lines = codeContent.split('\n').filter(l => l.trim().length > 0).length;
+    const lengthScore = Math.min(lines * 2, 40);
+    score += lengthScore;
+    explanation.push(`Code length (${lines} lines): +${lengthScore} points`);
+    
+    // Big bonus for successful run
+    if (executionSuccess) {
+        score += 50;
+        explanation.push('Successful execution: +50 points');
+    } else {
+        explanation.push('Execution failed or not tested: +0 points');
+    }
+    
+    return {
+        score: Math.min(score, 100),
+        explanation: explanation
+    };
 };
 
 
 // --- Component ---
 
 export default function CodingZonePage() {
-    const [language, setLanguage] = useState('python');
-    const [code, setCode] = useState(codeStarters?.python || '# Write your Python code here\nprint("Hello, World!")');
+    // Load language from localStorage or default to python
+    const [language, setLanguage] = useState(() => {
+        const saved = localStorage.getItem('codingZone_language');
+        return saved || 'python';
+    });
+    const [code, setCode] = useState(() => {
+        const saved = localStorage.getItem('codingZone_code');
+        const savedLang = localStorage.getItem('codingZone_language') || 'python';
+        return saved || codeStarters?.[savedLang] || `# Write your ${savedLang.toUpperCase()} code here\nprint("Hello, World!")`;
+    });
     const [output, setOutput] = useState('');
     const [isRunning, setIsRunning] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [score, setScore] = useState(null);
+    const [scoreExplanation, setScoreExplanation] = useState('');
     const [feedback, setFeedback] = useState('');
     const [isExecutionSuccess, setIsExecutionSuccess] = useState(false); // Track last run
     const [showCustomInputs, setShowCustomInputs] = useState(false);
     const [customInput, setCustomInput] = useState('');
+
+    // Save code to localStorage whenever it changes
+    useEffect(() => {
+        localStorage.setItem('codingZone_code', code);
+    }, [code]);
 
     const downloadCode = () => {
         const langConfig = languageMap[language];
@@ -183,12 +219,16 @@ export default function CodingZonePage() {
 
     const handleLanguageChange = (newLanguage) => {
         setLanguage(newLanguage);
-        setCode(codeStarters?.[newLanguage] || `// Write your ${newLanguage.toUpperCase()} code here`);
+        localStorage.setItem('codingZone_language', newLanguage);
+        const starter = codeStarters?.[newLanguage] || `// Write your ${newLanguage.toUpperCase()} code here`;
+        setCode(starter);
+        localStorage.setItem('codingZone_code', starter);
         setOutput('');
         setScore(null);
+        setScoreExplanation('');
         setFeedback('');
         setIsExecutionSuccess(false);
-        toast.info(`Switched to ${newLanguage.toUpperCase()}`);
+        toast.info(`Switched to ${languageMap[newLanguage]?.displayName || newLanguage.toUpperCase()}`);
     };
 
     const handleRunCode = async () => {
@@ -235,13 +275,14 @@ export default function CodingZonePage() {
             setFeedback(aiFeedback);
 
             // 2. Calculate Score (based on last execution)
-            const calculatedScore = calculateScore(code, isExecutionSuccess);
-            setScore(calculatedScore);
+            const scoreResult = calculateScore(code, isExecutionSuccess);
+            setScore(scoreResult.score);
+            setScoreExplanation(scoreResult.explanation.join('\n'));
 
             // 3. Update Output Panel
             setOutput(`--- Submission Results ---
 Status: Submitted
-Basic Score: ${calculatedScore}/100
+Score: ${scoreResult.score}/100
 (Based on code length and last execution status)
 
 --- AI Feedback ---

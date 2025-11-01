@@ -18,6 +18,7 @@ import StudentCodingZone from './pages/student/CodingZonePage';
 import StudentGrades from './pages/student/GradesPage';
 import StudentCalendar from './pages/student/CalendarPage';
 import StudentFeedback from './pages/student/FeedbackPage';
+import StudentQuizzes from './pages/student/QuizzesPage';
 import StudentSettings from './pages/student/SettingsPage';
 
 // Faculty Pages
@@ -57,6 +58,7 @@ function App() {
             <Route path="grades" element={<StudentGrades />} />
             <Route path="calendar" element={<StudentCalendar />} />
             <Route path="feedback" element={<StudentFeedback />} />
+            <Route path="quizzes" element={<StudentQuizzes />} />
             <Route path="settings" element={<StudentSettings />} />
           </Route>
 

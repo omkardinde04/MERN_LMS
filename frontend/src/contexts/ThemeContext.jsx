@@ -19,12 +19,21 @@ export const ThemeProvider = ({ children }) => {
         return savedTheme || 'light';
     });
 
+    // Apply theme on mount and when it changes
     useEffect(() => {
         const root = window.document.documentElement;
         root.classList.remove('light', 'dark');
         root.classList.add(theme);
         localStorage.setItem('theme', theme);
     }, [theme]);
+
+    // Apply initial theme on mount
+    useEffect(() => {
+        const root = window.document.documentElement;
+        if (!root.classList.contains('light') && !root.classList.contains('dark')) {
+            root.classList.add(theme);
+        }
+    }, []);
 
     const toggleTheme = () => {
         setTheme((prevTheme) => (prevTheme === 'light' ? 'dark' : 'light'));

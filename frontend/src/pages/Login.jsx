@@ -111,9 +111,9 @@ export default function Login() {
                         initial={{ opacity: 0, y: -20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.5 }}
-                        className="w-20 h-20 bg-background rounded-3xl flex items-center justify-center mb-8"
+                        className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center mb-8 shadow-learnify-lg"
                     >
-                        <span className="text-5xl font-bold text-primary-foreground">L</span>
+                        <span className="text-5xl font-bold text-primary">L</span>
                     </motion.div>
 
                     <motion.h1
@@ -173,10 +173,10 @@ export default function Login() {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.5 }}
                     >
-                        <Card className="border-0 shadow-none">
-                            <CardHeader className="space-y-1 px-0">
-                                <CardTitle className="text-3xl font-bold">Sign In</CardTitle>
-                                <CardDescription className="text-base">
+                        <Card className="border-0 shadow-none bg-transparent">
+                            <CardHeader className="space-y-2 px-0">
+                                <CardTitle className="text-3xl font-bold text-black">Sign In</CardTitle>
+                                <CardDescription className="text-base text-muted-foreground">
                                     Enter your credentials to access your dashboard
                                 </CardDescription>
                             </CardHeader>
@@ -185,13 +185,13 @@ export default function Login() {
                                     <div className="space-y-2">
                                         <Label htmlFor="fullName">Full Name</Label>
                                         <div className="relative">
-                                            <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                                            <User className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground z-10" />
                                             <Input
                                                 id="fullName"
                                                 name="fullName"
                                                 type="text"
                                                 placeholder="Enter your full name"
-                                                className="pl-10"
+                                                className="pl-10 w-full"
                                                 value={formData.fullName}
                                                 onChange={handleChange}
                                             />
@@ -204,13 +204,13 @@ export default function Login() {
                                     <div className="space-y-2">
                                         <Label htmlFor="email">Email</Label>
                                         <div className="relative">
-                                            <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                                            <Mail className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground z-10" />
                                             <Input
                                                 id="email"
                                                 name="email"
                                                 type="email"
                                                 placeholder="your.email@somaiya.edu"
-                                                className="pl-10"
+                                                className="pl-10 w-full"
                                                 value={formData.email}
                                                 onChange={handleChange}
                                             />
@@ -223,13 +223,13 @@ export default function Login() {
                                     <div className="space-y-2">
                                         <Label htmlFor="id">4-Digit ID</Label>
                                         <div className="relative">
-                                            <Hash className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                                            <Hash className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground z-10" />
                                             <Input
                                                 id="id"
                                                 name="id"
                                                 type="text"
                                                 placeholder="Enter 4-digit ID"
-                                                className="pl-10"
+                                                className="pl-10 w-full"
                                                 value={formData.id}
                                                 onChange={handleChange}
                                                 maxLength={4}
@@ -251,13 +251,13 @@ export default function Login() {
                                             </button>
                                         </div>
                                         <div className="relative">
-                                            <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                                            <Lock className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground z-10" />
                                             <Input
                                                 id="password"
                                                 name="password"
                                                 type="password"
                                                 placeholder="Enter your password"
-                                                className="pl-10"
+                                                className="pl-10 w-full"
                                                 value={formData.password}
                                                 onChange={handleChange}
                                             />
@@ -274,9 +274,9 @@ export default function Login() {
                                             name="rememberMe"
                                             checked={formData.rememberMe}
                                             onChange={handleChange}
-                                            className="h-4 w-4 rounded border-gray-300"
+                                            className="h-4 w-4 rounded border-2 border-input text-primary focus:ring-2 focus:ring-ring focus:ring-offset-2"
                                         />
-                                        <Label htmlFor="rememberMe" className="text-sm font-normal">
+                                        <Label htmlFor="rememberMe" className="text-sm font-medium text-foreground">
                                             Remember me
                                         </Label>
                                     </div>

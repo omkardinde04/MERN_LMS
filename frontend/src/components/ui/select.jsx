@@ -109,25 +109,30 @@ const SelectContent = ({ className, children, onValueChange, setOpen, value, ...
 };
 SelectContent.displayName = "SelectContent";
 
-const SelectItem = React.forwardRef(({ className, children, value, onValueChange, setOpen, currentValue, ...props }, ref) => (
-    <div
-        ref={ref}
-        className={cn(
-            "relative flex w-full cursor-pointer select-none items-center rounded-sm py-2 px-3 text-sm outline-none transition-colors",
-            "hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground",
-            "text-foreground",
-            currentValue === value && "bg-accent text-accent-foreground font-medium",
-            className
-        )}
-        onClick={() => {
-            onValueChange(value);
-            setOpen(false);
-        }}
-        {...props}
-    >
-        {children}
-    </div>
-));
+const SelectItem = React.forwardRef(({ className, children, value, onValueChange, setOpen, currentValue, ...props }, ref) => {
+    // Filter out non-native props before spreading
+    const { onValueChange: _, setOpen: __, currentValue: ___, ...nativeProps } = props;
+    
+    return (
+        <div
+            ref={ref}
+            className={cn(
+                "relative flex w-full cursor-pointer select-none items-center rounded-sm py-2 px-3 text-sm outline-none transition-colors",
+                "hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground",
+                "text-foreground",
+                currentValue === value && "bg-accent text-accent-foreground font-medium",
+                className
+            )}
+            onClick={() => {
+                onValueChange(value);
+                setOpen(false);
+            }}
+            {...nativeProps}
+        >
+            {children}
+        </div>
+    );
+});
 SelectItem.displayName = "SelectItem";
 
 const SelectValue = ({ placeholder, currentValue, children }) => {

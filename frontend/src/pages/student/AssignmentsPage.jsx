@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { getLocalData, setLocalData } from '@/utils/storage';
-import { FileText, Upload, CheckCircle2, Clock } from 'lucide-react';
+import { FileText, Upload, CheckCircle2, Clock, Eye, Download as DownloadIcon, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 
@@ -16,6 +16,7 @@ export default function AssignmentsPage() {
     const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
     const [selectedAssignment, setSelectedAssignment] = useState(null);
     const [file, setFile] = useState(null);
+    const [previewAssignment, setPreviewAssignment] = useState(null);
 
     const pendingAssignments = assignments.filter(a => a.status === 'pending');
     const submittedAssignments = assignments.filter(a => a.status === 'submitted');
@@ -30,19 +31,36 @@ export default function AssignmentsPage() {
             return;
         }
 
-        const updatedAssignments = assignments.map(a =>
-            a.id === selectedAssignment.id
-                ? { ...a, status: 'submitted', submittedAt: new Date().toISOString().split('T')[0] }
-                : a
-        );
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            const fileData = {
+                name: file.name,
+                size: file.size,
+                type: file.type,
+                data: reader.result, // Base64 or data URL
+            };
 
-        setAssignments(updatedAssignments);
-        setLocalData('assignments', updatedAssignments);
+            const updatedAssignments = assignments.map(a =>
+                a.id === selectedAssignment.id
+                    ? { 
+                        ...a, 
+                        status: 'submitted', 
+                        submittedAt: new Date().toISOString().split('T')[0],
+                        submittedFile: fileData
+                    }
+                    : a
+            );
 
-        toast.success('Assignment submitted successfully!');
-        setUploadDialogOpen(false);
-        setSelectedAssignment(null);
-        setFile(null);
+            setAssignments(updatedAssignments);
+            setLocalData('assignments', updatedAssignments);
+
+            toast.success('Assignment submitted successfully!');
+            setUploadDialogOpen(false);
+            setSelectedAssignment(null);
+            setFile(null);
+        };
+        reader.readAsDataURL(file);
+
     };
 
     const openUploadDialog = (assignment = null) => {
@@ -160,6 +178,44 @@ export default function AssignmentsPage() {
                                     </CardHeader>
                                     <CardContent>
                                         <p className="text-sm text-muted-foreground">{assignment.description}</p>
+                                        
+                                        {assignment.submittedFile && (
+                                            <div className="mt-4 p-3 bg-muted rounded-lg border border-border">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-2">
+                                                        <FileText className="h-4 w-4 text-primary" />
+                                                        <span className="text-sm font-medium">{assignment.submittedFile.name}</span>
+                                                        <span className="text-xs text-muted-foreground">
+                                                            ({(assignment.submittedFile.size / 1024).toFixed(2)} KB)
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex gap-2">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => setPreviewAssignment(assignment)}
+                                                        >
+                                                            <Eye className="h-4 w-4" />
+                                                        </Button>
+                                                        {assignment.submittedFile.data && (
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => {
+                                                                    const link = document.createElement('a');
+                                                                    link.href = assignment.submittedFile.data;
+                                                                    link.download = assignment.submittedFile.name;
+                                                                    link.click();
+                                                                }}
+                                                            >
+                                                                <DownloadIcon className="h-4 w-4" />
+                                                            </Button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                        
                                         <div className="mt-4 flex items-center justify-between text-sm">
                                             <span className="text-muted-foreground">
                                                 Submitted on: {new Date(assignment.submittedAt).toLocaleDateString()}
@@ -234,6 +290,62 @@ export default function AssignmentsPage() {
                     </div>
                 </DialogContent>
             </Dialog>
+
+            {/* Preview Dialog */}
+            {previewAssignment && previewAssignment.submittedFile && (
+                <Dialog open={!!previewAssignment} onOpenChange={() => setPreviewAssignment(null)}>
+                    <DialogContent className="max-w-4xl max-h-[90vh]">
+                        <DialogHeader>
+                            <DialogTitle className="flex items-center justify-between">
+                                <span>Preview: {previewAssignment.submittedFile.name}</span>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => setPreviewAssignment(null)}
+                                >
+                                    <X className="h-4 w-4" />
+                                </Button>
+                            </DialogTitle>
+                            <DialogDescription>
+                                {previewAssignment.title} - {previewAssignment.courseName}
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="mt-4 max-h-[60vh] overflow-auto">
+                            {previewAssignment.submittedFile.type?.startsWith('image/') ? (
+                                <img 
+                                    src={previewAssignment.submittedFile.data} 
+                                    alt={previewAssignment.submittedFile.name}
+                                    className="w-full rounded-lg"
+                                />
+                            ) : previewAssignment.submittedFile.type === 'application/pdf' ? (
+                                <iframe 
+                                    src={previewAssignment.submittedFile.data}
+                                    className="w-full h-[60vh] rounded-lg border"
+                                    title={previewAssignment.submittedFile.name}
+                                />
+                            ) : (
+                                <div className="p-8 text-center">
+                                    <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+                                    <p className="text-muted-foreground mb-4">
+                                        Preview not available for this file type
+                                    </p>
+                                    <Button
+                                        onClick={() => {
+                                            const link = document.createElement('a');
+                                            link.href = previewAssignment.submittedFile.data;
+                                            link.download = previewAssignment.submittedFile.name;
+                                            link.click();
+                                        }}
+                                    >
+                                        <DownloadIcon className="h-4 w-4 mr-2" />
+                                        Download File
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
+                    </DialogContent>
+                </Dialog>
+            )}
         </div>
     );
 }

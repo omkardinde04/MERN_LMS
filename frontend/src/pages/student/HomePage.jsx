@@ -67,18 +67,19 @@ export default function HomePage() {
                 className="flex items-center justify-between"
             >
                 <div>
-                    <h1 className="text-3xl font-bold">Welcome back, {user?.fullName?.split(' ')[0]}! 👋</h1>
-                    <p className="text-muted-foreground mt-1">Here's what's happening with your courses today.</p>
+                    <h1 className="text-3xl font-bold text-black">Welcome back, {user?.fullName?.split(' ')[0]}! 👋</h1>
+                    <p className="text-muted-foreground mt-1 font-medium">Here's what's happening with your courses today.</p>
                 </div>
                 <Button
                     variant="ghost"
                     size="icon"
-                    className="rounded-full"
+                    className="rounded-full p-0"
                     onClick={() => navigate('/student/settings')}
                 >
-                    <Avatar className="h-12 w-12 cursor-pointer border-2 border-primary">
-                        <AvatarImage src={user?.avatar} alt={user?.fullName} />
-                        <AvatarFallback>{user?.fullName?.charAt(0)}</AvatarFallback>
+                    <Avatar className="h-12 w-12 cursor-pointer border-2 border-primary shadow-sm hover:shadow-md transition-shadow">
+                        <AvatarFallback className="bg-primary text-primary-foreground font-bold text-lg">
+                            {user?.fullName?.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() || 'U'}
+                        </AvatarFallback>
                     </Avatar>
                 </Button>
             </motion.div>
@@ -89,19 +90,19 @@ export default function HomePage() {
                 initial="hidden"
                 animate="visible"
             >
-                <h2 className="text-xl font-semibold mb-4">Quick Actions</h2>
+                <h2 className="text-xl font-bold text-black mb-4">Quick Actions</h2>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                     {quickActions.map((action, index) => (
                         <motion.div key={index} variants={itemVariants}>
                             <Card
-                                className="cursor-pointer hover:shadow-lg transition-all hover:scale-105"
+                                className="cursor-pointer hover:shadow-learnify-lg transition-all hover:scale-105 border-2 border-border hover:border-primary/30"
                                 onClick={() => navigate(action.path)}
                             >
                                 <CardContent className="p-6 flex flex-col items-center text-center space-y-2">
-                                    <div className={`${action.color} p-3 rounded-lg`}>
-                                        <action.icon className="h-6 w-6 text-white" />
+                                    <div className="bg-primary p-3 rounded-lg shadow-sm">
+                                        <action.icon className="h-6 w-6 text-primary-foreground" />
                                     </div>
-                                    <p className="text-sm font-medium">{action.label}</p>
+                                    <p className="text-sm font-semibold text-foreground">{action.label}</p>
                                 </CardContent>
                             </Card>
                         </motion.div>

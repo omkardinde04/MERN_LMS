@@ -34,9 +34,11 @@ export default function SettingsPage() {
     });
 
     const handleProfileUpdate = () => {
-        const updatedUser = { ...user, ...profile };
+        const updatedUser = { ...user, ...profile, avatar: avatar };
         setUser(updatedUser);
         toast.success('Profile updated successfully');
+        // Force page reload to reflect changes on home page
+        setTimeout(() => window.location.reload(), 500);
     };
 
     const handleAvatarChange = (e) => {
@@ -124,7 +126,7 @@ export default function SettingsPage() {
                                             <Button variant="outline" asChild>
                                                 <span>
                                                     <Upload className="h-4 w-4 mr-2" />
-                                                    Change Picture
+                                                    Change Profile
                                                 </span>
                                             </Button>
                                         </Label>

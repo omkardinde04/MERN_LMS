@@ -4,8 +4,9 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { getLocalData, setLocalData } from '@/utils/storage';
-import { MessageSquare, Trash2, Star } from 'lucide-react';
+import { MessageSquare, Trash2, Star, Upload, FileText, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 
@@ -15,12 +16,31 @@ export default function FeedbackPage() {
     const [selectedCourse, setSelectedCourse] = useState('');
     const [rating, setRating] = useState('');
     const [comment, setComment] = useState('');
+    const [selectedFile, setSelectedFile] = useState(null);
+    const [fileName, setFileName] = useState('');
+
+    const handleFileChange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            if (file.size > 5 * 1024 * 1024) {
+                toast.error('File size must be less than 5MB');
+                return;
+            }
+            setSelectedFile(file);
+            setFileName(file.name);
+        }
+    };
+
+    const handleRemoveFile = () => {
+        setSelectedFile(null);
+        setFileName('');
+    };
 
     const handleSubmit = (e) => {
         e.preventDefault();
 
         if (!selectedCourse || !rating || !comment) {
-            toast.error('Please fill in all fields');
+            toast.error('Please fill in all required fields');
             return;
         }
 
@@ -31,6 +51,8 @@ export default function FeedbackPage() {
             courseName: course.name,
             rating: parseInt(rating),
             comment,
+            fileName: selectedFile ? fileName : null,
+            fileSize: selectedFile ? (selectedFile.size / 1024).toFixed(2) + ' KB' : null,
             date: new Date().toISOString().split('T')[0],
         };
 
@@ -41,6 +63,8 @@ export default function FeedbackPage() {
         setSelectedCourse('');
         setRating('');
         setComment('');
+        setSelectedFile(null);
+        setFileName('');
         toast.success('Feedback submitted successfully!');
     };
 
@@ -104,16 +128,59 @@ export default function FeedbackPage() {
                                 </div>
 
                                 <div className="space-y-2">
-                                    <Label>Comments</Label>
+                                    <Label>Your Feedback *</Label>
                                     <Textarea
                                         value={comment}
                                         onChange={(e) => setComment(e.target.value)}
-                                        placeholder="Share your detailed feedback..."
+                                        placeholder="Share your thoughts about the course, teaching methodology, assignments, etc."
                                         className="min-h-[150px]"
                                     />
                                 </div>
 
+                                <div className="space-y-2">
+                                    <Label>Upload File (Optional)</Label>
+                                    {!selectedFile ? (
+                                        <div>
+                                            <Label htmlFor="file-upload" className="cursor-pointer">
+                                                <Button variant="outline" type="button" asChild className="w-full">
+                                                    <span>
+                                                        <Upload className="h-4 w-4 mr-2" />
+                                                        Choose File
+                                                    </span>
+                                                </Button>
+                                            </Label>
+                                            <Input
+                                                id="file-upload"
+                                                type="file"
+                                                accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png"
+                                                className="hidden"
+                                                onChange={handleFileChange}
+                                            />
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                                            <div className="flex items-center gap-2 flex-1">
+                                                <FileText className="h-4 w-4 text-primary" />
+                                                <span className="text-sm font-medium truncate">{fileName}</span>
+                                            </div>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={handleRemoveFile}
+                                                className="h-8 w-8"
+                                            >
+                                                <X className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    )}
+                                    <p className="text-xs text-muted-foreground">
+                                        Supported formats: PDF, DOC, DOCX, TXT, JPG, PNG (Max 5MB)
+                                    </p>
+                                </div>
+
                                 <Button type="submit" className="w-full">
+                                    <MessageSquare className="h-4 w-4 mr-2" />
                                     Submit Feedback
                                 </Button>
                             </form>
@@ -157,6 +224,15 @@ export default function FeedbackPage() {
                                             </Button>
                                         </div>
                                         <p className="text-sm text-muted-foreground">{feedback.comment}</p>
+                                        {feedback.fileName && (
+                                            <div className="flex items-center gap-2 mt-2 p-2 bg-background rounded border border-border">
+                                                <FileText className="h-4 w-4 text-primary" />
+                                                <span className="text-xs font-medium">{feedback.fileName}</span>
+                                                {feedback.fileSize && (
+                                                    <span className="text-xs text-muted-foreground">({feedback.fileSize})</span>
+                                                )}
+                                            </div>
+                                        )}
                                         <p className="text-xs text-muted-foreground mt-2">
                                             {new Date(feedback.date).toLocaleDateString()}
                                         </p>
