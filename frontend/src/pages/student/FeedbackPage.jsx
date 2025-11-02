@@ -1,13 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { getLocalData, setLocalData } from '@/utils/storage';
-import { MessageSquare, Trash2, Star, Upload, FileText, X } from 'lucide-react';
+import { MessageSquare, Trash2, Star, Upload, FileText, X, Eye, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 
@@ -21,6 +22,9 @@ export default function FeedbackPage() {
     const [fileName, setFileName] = useState('');
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [feedbackToDelete, setFeedbackToDelete] = useState(null);
+    const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
+    const [previewData, setPreviewData] = useState(null);
+    const fileInputRef = useRef(null);
 
     const handleFileChange = (e) => {
         const file = e.target.files[0];
@@ -29,14 +33,27 @@ export default function FeedbackPage() {
                 toast.error('File size must be less than 5MB');
                 return;
             }
-            setSelectedFile(file);
-            setFileName(file.name);
+            
+            // Create a file reader to get base64 data for preview
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setSelectedFile({
+                    file: file,
+                    preview: reader.result,
+                    type: file.type
+                });
+                setFileName(file.name);
+            };
+            reader.readAsDataURL(file);
         }
     };
 
     const handleRemoveFile = () => {
         setSelectedFile(null);
         setFileName('');
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
     };
 
     const handleSubmit = (e) => {
@@ -55,7 +72,9 @@ export default function FeedbackPage() {
             rating: parseInt(rating),
             comment,
             fileName: selectedFile ? fileName : null,
-            fileSize: selectedFile ? (selectedFile.size / 1024).toFixed(2) + ' KB' : null,
+            fileSize: selectedFile ? (selectedFile.file.size / 1024).toFixed(2) + ' KB' : null,
+            filePreview: selectedFile ? selectedFile.preview : null,
+            fileType: selectedFile ? selectedFile.type : null,
             date: new Date().toISOString().split('T')[0],
         };
 
@@ -68,6 +87,9 @@ export default function FeedbackPage() {
         setComment('');
         setSelectedFile(null);
         setFileName('');
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
         toast.success('Feedback submitted successfully!');
     };
 
@@ -83,6 +105,35 @@ export default function FeedbackPage() {
     const openDeleteDialog = (feedback) => {
         setFeedbackToDelete(feedback);
         setDeleteDialogOpen(true);
+    };
+
+    const handleDownload = (feedback) => {
+        if (!feedback.filePreview || !feedback.fileName) {
+            toast.error('No file available to download');
+            return;
+        }
+
+        try {
+            // Convert base64 to blob
+            const link = document.createElement('a');
+            link.href = feedback.filePreview;
+            link.download = feedback.fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            toast.success('File downloaded successfully');
+        } catch (error) {
+            toast.error('Failed to download file');
+        }
+    };
+
+    const handlePreview = (feedback) => {
+        if (!feedback.filePreview) {
+            toast.error('No preview available');
+            return;
+        }
+        setPreviewData(feedback);
+        setPreviewDialogOpen(true);
     };
 
     return (
@@ -151,16 +202,17 @@ export default function FeedbackPage() {
                                     <Label>Upload File (Optional)</Label>
                                     {!selectedFile ? (
                                         <div>
-                                            <Label htmlFor="file-upload" className="cursor-pointer">
-                                                <Button variant="outline" type="button" asChild className="w-full">
-                                                    <span>
-                                                        <Upload className="h-4 w-4 mr-2" />
-                                                        Choose File
-                                                    </span>
-                                                </Button>
-                                            </Label>
+                                            <Button 
+                                                variant="outline" 
+                                                type="button" 
+                                                className="w-full justify-center"
+                                                onClick={() => fileInputRef.current?.click()}
+                                            >
+                                                <Upload className="h-4 w-4 mr-2" />
+                                                Choose File
+                                            </Button>
                                             <Input
-                                                id="file-upload"
+                                                ref={fileInputRef}
                                                 type="file"
                                                 accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png"
                                                 className="hidden"
@@ -168,20 +220,32 @@ export default function FeedbackPage() {
                                             />
                                         </div>
                                     ) : (
-                                        <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                                            <div className="flex items-center gap-2 flex-1">
-                                                <FileText className="h-4 w-4 text-primary" />
-                                                <span className="text-sm font-medium truncate">{fileName}</span>
+                                        <div className="space-y-2">
+                                            <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                                                <div className="flex items-center gap-2 flex-1">
+                                                    <FileText className="h-4 w-4 text-primary" />
+                                                    <span className="text-sm font-medium truncate">{fileName}</span>
+                                                </div>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={handleRemoveFile}
+                                                    className="h-8 w-8"
+                                                >
+                                                    <X className="h-4 w-4" />
+                                                </Button>
                                             </div>
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="icon"
-                                                onClick={handleRemoveFile}
-                                                className="h-8 w-8"
-                                            >
-                                                <X className="h-4 w-4" />
-                                            </Button>
+                                            {/* Show preview for images */}
+                                            {selectedFile && selectedFile.type?.startsWith('image/') && (
+                                                <div className="relative rounded-lg overflow-hidden border border-border">
+                                                    <img 
+                                                        src={selectedFile.preview} 
+                                                        alt={fileName}
+                                                        className="w-full h-auto max-h-48 object-cover"
+                                                    />
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                     <p className="text-xs text-muted-foreground">
@@ -235,11 +299,51 @@ export default function FeedbackPage() {
                                         </div>
                                         <p className="text-sm text-muted-foreground">{feedback.comment}</p>
                                         {feedback.fileName && (
-                                            <div className="flex items-center gap-2 mt-2 p-2 bg-background rounded border border-border">
-                                                <FileText className="h-4 w-4 text-primary" />
-                                                <span className="text-xs font-medium">{feedback.fileName}</span>
-                                                {feedback.fileSize && (
-                                                    <span className="text-xs text-muted-foreground">({feedback.fileSize})</span>
+                                            <div className="mt-3 space-y-2">
+                                                <div className="flex items-center justify-between p-2 bg-background rounded border border-border">
+                                                    <div className="flex items-center gap-2">
+                                                        <FileText className="h-4 w-4 text-primary" />
+                                                        <span className="text-xs font-medium">{feedback.fileName}</span>
+                                                        {feedback.fileSize && (
+                                                            <span className="text-xs text-muted-foreground">({feedback.fileSize})</span>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex items-center gap-1">
+                                                        {feedback.filePreview && (
+                                                            <>
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    className="h-7 text-xs"
+                                                                    onClick={() => handlePreview(feedback)}
+                                                                >
+                                                                    <Eye className="h-3 w-3 mr-1" />
+                                                                    Preview
+                                                                </Button>
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    className="h-7 text-xs"
+                                                                    onClick={() => handleDownload(feedback)}
+                                                                >
+                                                                    <Download className="h-3 w-3 mr-1" />
+                                                                    Download
+                                                                </Button>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                {feedback.filePreview && feedback.fileType?.startsWith('image/') && (
+                                                    <div className="relative rounded-lg overflow-hidden border border-border">
+                                                        <img 
+                                                            src={feedback.filePreview} 
+                                                            alt={feedback.fileName}
+                                                            className="w-full h-auto max-h-48 object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                                                            onClick={() => handlePreview(feedback)}
+                                                        />
+                                                    </div>
                                                 )}
                                             </div>
                                         )}
@@ -275,6 +379,57 @@ export default function FeedbackPage() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            {/* Preview Dialog */}
+            <Dialog open={previewDialogOpen} onOpenChange={setPreviewDialogOpen}>
+                <DialogContent className="max-w-4xl max-h-[85vh]">
+                    <DialogHeader>
+                        <DialogTitle>File Preview</DialogTitle>
+                        <DialogDescription>
+                            {previewData?.fileName}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <FileText className="h-4 w-4" />
+                                <span>{previewData?.fileName}</span>
+                                {previewData?.fileSize && (
+                                    <span>({previewData.fileSize})</span>
+                                )}
+                            </div>
+                            <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => handleDownload(previewData)}
+                            >
+                                <Download className="h-4 w-4 mr-1" />
+                                Download
+                            </Button>
+                        </div>
+                        <div className="border rounded-lg overflow-hidden bg-muted/30">
+                            {previewData?.fileType?.startsWith('image/') ? (
+                                <img 
+                                    src={previewData.filePreview} 
+                                    alt={previewData.fileName}
+                                    className="w-full h-auto max-h-[600px] object-contain"
+                                />
+                            ) : (
+                                <div className="p-12 text-center">
+                                    <FileText className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+                                    <p className="text-sm text-muted-foreground mb-4">
+                                        Preview not available for this file type
+                                    </p>
+                                    <Button onClick={() => handleDownload(previewData)}>
+                                        <Download className="h-4 w-4 mr-2" />
+                                        Download File
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

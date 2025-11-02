@@ -16,21 +16,21 @@ function UiCalendar({ className, classNames, showOutsideDays = true, ...props })
         nav: 'space-x-2 flex items-center',
         nav_button: cn(
           buttonVariants({ variant: 'outline' }),
-          'h-7 w-7 bg-black p-0 opacity-50 hover:opacity-100'
+          'h-7 w-7 bg-background p-0 opacity-50 hover:opacity-100'
         ),
         nav_button_previous: 'absolute left-1',
         nav_button_next: 'absolute right-2',
         table: 'w-full border-collapse space-y-1',
-        head_row: '',
-        head_cell: 'text-muted-foreground rounded-md w-9 font-normal text-[0.8rem]',
-        row: '',
-        cell: 'h-9 w-9 text-center text-sm p-0 relative',
+        head_row: 'flex justify-around',
+        head_cell: 'text-muted-foreground rounded-md w-9 font-normal text-[0.8rem] text-center',
+        row: 'flex w-full mt-2 justify-around',
+        cell: 'h-9 w-9 text-center text-sm p-0 relative flex items-center justify-center',
         day: cn(
           buttonVariants({ variant: 'ghost' }),
-          'h-9 w-9 p-0 font-normal aria-selected:opacity-100'
+          'h-9 w-9 p-0 font-normal aria-selected:opacity-100 flex items-center justify-center'
         ),
         day_selected:
-          'bg-red text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground',
+          'bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground',
         day_today: 'bg-accent text-accent-foreground',
         day_outside:
           'day-outside text-muted-foreground opacity-50 aria-selected:bg-accent/50 aria-selected:text-muted-foreground aria-selected:opacity-30',
@@ -38,7 +38,7 @@ function UiCalendar({ className, classNames, showOutsideDays = true, ...props })
         ...classNames,
       }}
       components={{
-        IconLeft: () => <ChevronLeft className="h-9 w-9" />,
+        IconLeft: () => <ChevronLeft className="h-4 w-4" />,
         IconRight: () => <ChevronRight className="h-4 w-4" />,
       }}
       {...props}

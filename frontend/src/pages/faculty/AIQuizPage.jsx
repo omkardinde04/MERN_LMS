@@ -5,12 +5,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Brain, Sparkles, FileText, Download, Copy } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Brain, Sparkles, FileText, Download, Copy, Send, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
+import { getLocalData, setLocalData } from '@/utils/storage';
 
 export default function AIQuizPage() {
     const [isGenerating, setIsGenerating] = useState(false);
+    const [isSendDialogOpen, setIsSendDialogOpen] = useState(false);
     const [formData, setFormData] = useState({
         topic: '',
         difficulty: 'medium',
@@ -19,6 +22,9 @@ export default function AIQuizPage() {
         context: '',
     });
     const [generatedQuiz, setGeneratedQuiz] = useState(null);
+    const [selectedCourses, setSelectedCourses] = useState([]);
+
+    const courses = getLocalData('courses', []);
 
     const handleInputChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -28,25 +34,86 @@ export default function AIQuizPage() {
         setFormData({ ...formData, [name]: value });
     };
 
+    const handleCourseSelect = (courseId) => {
+        setSelectedCourses(prev => 
+            prev.includes(courseId) 
+                ? prev.filter(id => id !== courseId) 
+                : [...prev, courseId]
+        );
+    };
+
     const generateQuiz = async (e) => {
         e.preventDefault();
         setIsGenerating(true);
 
-        // Simulate AI generation
+        // Simulate AI generation with more dynamic questions
         setTimeout(() => {
+            const questionTypes = {
+                'multiple-choice': [
+                    {
+                        question: `What is the time complexity of binary search?`,
+                        options: ['O(n)', 'O(log n)', 'O(n log n)', 'O(1)'],
+                        correctAnswer: 'O(log n)',
+                        explanation: 'Binary search divides the search space in half at each step, resulting in logarithmic time complexity.'
+                    },
+                    {
+                        question: `Which data structure uses LIFO principle?`,
+                        options: ['Queue', 'Stack', 'Tree', 'Graph'],
+                        correctAnswer: 'Stack',
+                        explanation: 'Stack follows Last In First Out principle where the last element added is the first one to be removed.'
+                    },
+                    {
+                        question: `What does SQL stand for?`,
+                        options: ['Structured Query Language', 'Standard Query Language', 'Simple Query Language', 'Sequential Query Language'],
+                        correctAnswer: 'Structured Query Language',
+                        explanation: 'SQL stands for Structured Query Language, used for managing and querying relational databases.'
+                    }
+                ],
+                'true-false': [
+                    {
+                        question: `JavaScript is a compiled language.`,
+                        correctAnswer: 'False',
+                        explanation: 'JavaScript is an interpreted language, not a compiled language.'
+                    },
+                    {
+                        question: `React is a JavaScript library for building user interfaces.`,
+                        correctAnswer: 'True',
+                        explanation: 'React is indeed a JavaScript library developed by Facebook for building user interfaces.'
+                    }
+                ],
+                'short-answer': [
+                    {
+                        question: `What is the primary purpose of a constructor in object-oriented programming?`,
+                        correctAnswer: 'To initialize object properties when an object is created',
+                        explanation: 'Constructors are special methods that are automatically called when an object is instantiated to set up its initial state.'
+                    },
+                    {
+                        question: `What does CSS stand for?`,
+                        correctAnswer: 'Cascading Style Sheets',
+                        explanation: 'CSS is used for styling and layout of web pages written in HTML.'
+                    }
+                ]
+            };
+
+            // Generate questions based on selected type
+            const baseQuestions = questionTypes[formData.questionType] || questionTypes['multiple-choice'];
+            const numQuestions = parseInt(formData.numQuestions);
+            
+            // Cycle through base questions to fill the requested number
+            const questions = Array.from({ length: numQuestions }, (_, i) => {
+                const baseQuestion = baseQuestions[i % baseQuestions.length];
+                return {
+                    id: i + 1,
+                    ...baseQuestion
+                };
+            });
+
             const mockQuiz = {
+                id: Date.now(),
                 title: `${formData.topic} Quiz`,
                 difficulty: formData.difficulty,
-                questions: Array.from({ length: parseInt(formData.numQuestions) }, (_, i) => ({
-                    id: i + 1,
-                    question: `Sample question ${i + 1} about ${formData.topic}?`,
-                    type: formData.questionType,
-                    options: formData.questionType === 'multiple-choice'
-                        ? ['Option A', 'Option B', 'Option C', 'Option D']
-                        : null,
-                    correctAnswer: formData.questionType === 'multiple-choice' ? 'Option A' : 'Sample answer',
-                    explanation: 'This is an explanation of the correct answer.',
-                })),
+                questionType: formData.questionType,
+                questions: questions,
             };
 
             setGeneratedQuiz(mockQuiz);
@@ -70,6 +137,19 @@ export default function AIQuizPage() {
         a.download = `${formData.topic.replace(/\s+/g, '-')}-quiz.json`;
         a.click();
         toast.success('Quiz downloaded');
+    };
+
+    const sendQuizToStudents = () => {
+        if (selectedCourses.length === 0) {
+            toast.error('Please select at least one course');
+            return;
+        }
+
+        // In a real app, this would send the quiz to the backend
+        // For now, we'll just show a success message
+        toast.success(`Quiz sent to ${selectedCourses.length} course(s) successfully!`);
+        setIsSendDialogOpen(false);
+        setSelectedCourses([]);
     };
 
     return (
@@ -206,10 +286,57 @@ export default function AIQuizPage() {
                                     <div>
                                         <h3 className="font-semibold text-lg">{generatedQuiz.title}</h3>
                                         <p className="text-sm text-muted-foreground">
-                                            {generatedQuiz.questions.length} questions • {generatedQuiz.difficulty}
+                                            {generatedQuiz.questions.length} questions • {generatedQuiz.difficulty} • {generatedQuiz.questionType}
                                         </p>
                                     </div>
                                     <div className="flex gap-2">
+                                        <Dialog open={isSendDialogOpen} onOpenChange={setIsSendDialogOpen}>
+                                            <DialogTrigger asChild>
+                                                <Button variant="outline" size="icon">
+                                                    <Send className="h-4 w-4" />
+                                                </Button>
+                                            </DialogTrigger>
+                                            <DialogContent>
+                                                <DialogHeader>
+                                                    <DialogTitle>Send Quiz to Students</DialogTitle>
+                                                    <DialogDescription>
+                                                        Select courses to send this quiz to
+                                                    </DialogDescription>
+                                                </DialogHeader>
+                                                <div className="space-y-4">
+                                                    <div className="space-y-2">
+                                                        <Label>Select Courses</Label>
+                                                        {courses.length > 0 ? (
+                                                            courses.map(course => (
+                                                                <div key={course.id} className="flex items-center space-x-2">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        id={`course-${course.id}`}
+                                                                        checked={selectedCourses.includes(course.id)}
+                                                                        onChange={() => handleCourseSelect(course.id)}
+                                                                        className="h-4 w-4 rounded border-2 border-input text-primary focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                                                                    />
+                                                                    <Label htmlFor={`course-${course.id}`} className="font-medium">
+                                                                        {course.name} ({course.code})
+                                                                    </Label>
+                                                                </div>
+                                                            ))
+                                                        ) : (
+                                                            <p className="text-sm text-muted-foreground">No courses available</p>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex justify-end gap-2">
+                                                        <Button variant="outline" onClick={() => setIsSendDialogOpen(false)}>
+                                                            Cancel
+                                                        </Button>
+                                                        <Button onClick={sendQuizToStudents}>
+                                                            <Send className="h-4 w-4 mr-2" />
+                                                            Send Quiz
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            </DialogContent>
+                                        </Dialog>
                                         <Button variant="outline" size="icon" onClick={copyQuiz}>
                                             <Copy className="h-4 w-4" />
                                         </Button>

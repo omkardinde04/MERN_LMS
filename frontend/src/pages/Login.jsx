@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useTheme } from '@/contexts/ThemeContext';
 import { setUser } from '@/utils/storage';
-import { User, Mail, Hash, Lock, Moon, Sun, BookOpen, FileText, Brain, Code, Calendar, MessageSquare } from 'lucide-react';
+import { User, Mail, Hash, Lock, Moon, Sun, BookOpen, FileText, Brain, Code, Calendar, MessageSquare, GraduationCap } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 
@@ -113,7 +113,7 @@ export default function Login() {
                         transition={{ duration: 0.5 }}
                         className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center mb-8 shadow-learnify-lg"
                     >
-                        <span className="text-5xl font-bold text-primary">L</span>
+                        <GraduationCap className="h-10 w-10 text-primary" />
                     </motion.div>
                 </div>
                 <div className="w-full flex flex-col items-start">
@@ -178,7 +178,7 @@ export default function Login() {
                     >
                         <Card className="border-0 shadow-none bg-transparent px-8 py-6">
                             <CardHeader className="space-y-2 px-0">
-                                <CardTitle className="text-3xl font-bold text-black">Sign In</CardTitle>
+                                <CardTitle className="text-3xl font-bold">Sign In</CardTitle>
                                 <CardDescription className="text-base text-muted-foreground">
                                     Enter your credentials to access your dashboard
                                 </CardDescription>

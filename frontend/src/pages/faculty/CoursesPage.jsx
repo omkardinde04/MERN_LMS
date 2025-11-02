@@ -7,8 +7,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { getLocalData, setLocalData } from '@/utils/storage';
-import { Plus, Edit, Trash2, Users, BookOpen, Clock, Link as LinkIcon, Video, Bell, ArrowLeft, Copy, ExternalLink } from 'lucide-react';
+import { getLocalData, setLocalData, getUser } from '@/utils/storage';
+import { Plus, Edit, Trash2, Users, BookOpen, Clock, Link as LinkIcon, Video, Bell, ArrowLeft, Copy, ExternalLink, Search, Laptop, GraduationCap } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 
@@ -19,12 +19,15 @@ export default function CoursesPage() {
     const [editingCourse, setEditingCourse] = useState(null);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [courseToDelete, setCourseToDelete] = useState(null);
+    const [searchQuery, setSearchQuery] = useState('');
     const [formData, setFormData] = useState({
         name: '',
         code: '',
         description: '',
         semester: '',
         credits: '',
+        class: '',
+        totalStudents: '',
     });
 
     // Course management states
@@ -73,7 +76,7 @@ export default function CoursesPage() {
 
         setIsDialogOpen(false);
         setEditingCourse(null);
-        setFormData({ name: '', code: '', description: '', semester: '', credits: '' });
+        setFormData({ name: '', code: '', description: '', semester: '', credits: '', class: '', totalStudents: '' });
     };
 
     const handleEdit = (course) => {
@@ -84,6 +87,8 @@ export default function CoursesPage() {
             description: course.description || '',
             semester: course.semester || '',
             credits: course.credits || '',
+            class: course.class || '',
+            totalStudents: course.totalStudents || '',
         });
         setIsDialogOpen(true);
     };
@@ -461,16 +466,29 @@ export default function CoursesPage() {
                     <h1 className="text-3xl font-bold">My Courses</h1>
                     <p className="text-muted-foreground mt-1">Manage your course offerings</p>
                 </div>
-                <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                    <DialogTrigger asChild>
-                        <Button onClick={() => {
-                            setEditingCourse(null);
-                            setFormData({ name: '', code: '', description: '', semester: '', credits: '' });
-                        }}>
-                            <Plus className="h-4 w-4 mr-2" />
-                            Add Course
-                        </Button>
-                    </DialogTrigger>
+                <div className="flex items-center gap-4">
+                    <div className="relative">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            placeholder="Search courses..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="pl-9 w-64"
+                        />
+                    </div>
+                    <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                        <DialogTrigger asChild>
+                            <Button 
+                                className="bg-yellow-500 hover:bg-yellow-600 text-black font-semibold"
+                                onClick={() => {
+                                    setEditingCourse(null);
+                                    setFormData({ name: '', code: '', description: '', semester: '', credits: '', class: '', totalStudents: '' });
+                                }}
+                            >
+                                <Plus className="h-4 w-4 mr-2" />
+                                Create Course
+                            </Button>
+                        </DialogTrigger>
                     <DialogContent>
                         <DialogHeader>
                             <DialogTitle>{editingCourse ? 'Edit Course' : 'Add New Course'}</DialogTitle>
@@ -523,6 +541,27 @@ export default function CoursesPage() {
                                 />
                             </div>
                             <div>
+                                <Label htmlFor="class">Class/Section</Label>
+                                <Input
+                                    id="class"
+                                    name="class"
+                                    value={formData.class}
+                                    onChange={handleInputChange}
+                                    placeholder="e.g., TY-C1"
+                                />
+                            </div>
+                            <div>
+                                <Label htmlFor="totalStudents">Total Students</Label>
+                                <Input
+                                    id="totalStudents"
+                                    name="totalStudents"
+                                    type="number"
+                                    value={formData.totalStudents}
+                                    onChange={handleInputChange}
+                                    placeholder="e.g., 60"
+                                />
+                            </div>
+                            <div>
                                 <Label htmlFor="description">Description</Label>
                                 <Textarea
                                     id="description"
@@ -545,75 +584,57 @@ export default function CoursesPage() {
                     </DialogContent>
                 </Dialog>
             </div>
+        </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {courses.map((course, index) => (
+                {courses
+                    .filter(course => 
+                        !searchQuery || 
+                        course.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                        course.code?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                        course.class?.toLowerCase().includes(searchQuery.toLowerCase())
+                    )
+                    .map((course, index) => (
                     <motion.div
                         key={course.id}
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: index * 0.1 }}
                     >
-                        <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => setSelectedCourse(course)}>
-                            <CardHeader>
-                                <div className="flex items-start justify-between">
-                                    <div className="flex-1">
-                                        <CardTitle className="text-lg">{course.name}</CardTitle>
-                                        <CardDescription className="mt-1">{course.code}</CardDescription>
+                        <Card className="hover:shadow-lg transition-shadow cursor-pointer relative bg-card border-border" onClick={() => setSelectedCourse(course)}>
+                            {/* Delete button positioned at top right */}
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="absolute top-3 right-3 h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    openDeleteDialog(course, e);
+                                }}
+                            >
+                                <Trash2 className="h-4 w-4" />
+                            </Button>
+                            
+                            <CardHeader className="pb-3">
+                                <div className="flex items-start gap-4">
+                                    <div className="p-3 bg-primary/10 rounded-lg">
+                                        <Laptop className="h-6 w-6 text-primary" />
                                     </div>
-                                    <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            onClick={() => handleEdit(course)}
-                                        >
-                                            <Edit className="h-4 w-4" />
-                                        </Button>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            onClick={(e) => openDeleteDialog(course, e)}
-                                        >
-                                            <Trash2 className="h-4 w-4 text-destructive" />
-                                        </Button>
+                                    <div className="flex-1">
+                                        <CardTitle className="text-lg mb-1">{course.name}</CardTitle>
+                                        <CardDescription className="text-xs">Prof. {getUser()?.fullName || 'Unknown'}</CardDescription>
+                                        <CardDescription className="text-xs mt-0.5">{course.code}</CardDescription>
                                     </div>
                                 </div>
                             </CardHeader>
-                            <CardContent className="space-y-3">
-                                {course.description && (
-                                    <p className="text-sm text-muted-foreground line-clamp-2">
-                                        {course.description}
-                                    </p>
-                                )}
-                                <div className="flex items-center gap-4 text-sm">
-                                    <div className="flex items-center gap-1">
-                                        <Users className="h-4 w-4 text-muted-foreground" />
-                                        <span>{course.students || 0} students</span>
-                                    </div>
-                                    {course.credits && (
-                                        <div className="flex items-center gap-1">
-                                            <BookOpen className="h-4 w-4 text-muted-foreground" />
-                                            <span>{course.credits} credits</span>
-                                        </div>
-                                    )}
+                            <CardContent className="space-y-3 pt-0">
+                                <div className="flex items-center gap-2 text-sm text-yellow-600 dark:text-yellow-500">
+                                    <GraduationCap className="h-4 w-4" />
+                                    <span className="font-medium">{course.class || 'N/A'}</span>
                                 </div>
-                                {course.semester && (
-                                    <div className="flex items-center gap-1 text-sm">
-                                        <Clock className="h-4 w-4 text-muted-foreground" />
-                                        <span>{course.semester}</span>
-                                    </div>
-                                )}
-                                <div className="pt-2">
-                                    <div className="flex items-center justify-between text-sm mb-1">
-                                        <span className="text-muted-foreground">Progress</span>
-                                        <span className="font-medium">{course.progress || 0}%</span>
-                                    </div>
-                                    <div className="h-2 bg-muted rounded-full overflow-hidden">
-                                        <div
-                                            className="h-full bg-primary transition-all"
-                                            style={{ width: `${course.progress || 0}%` }}
-                                        />
-                                    </div>
+                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                    <Users className="h-4 w-4" />
+                                    <span>{course.students || 0} Students Enrolled</span>
                                 </div>
                             </CardContent>
                         </Card>

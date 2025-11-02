@@ -6,9 +6,12 @@ import {
     Calendar,
     Users,
     Brain,
+    Code,
     Settings,
     LogOut,
-    GraduationCap
+    GraduationCap,
+    MessageSquare,
+    FileText
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { removeUser } from '@/utils/storage';
@@ -20,8 +23,10 @@ const navItems = [
     { to: '/faculty/courses', icon: BookOpen, label: 'Courses' },
     { to: '/faculty/timetable', icon: Calendar, label: 'Timetable' },
     { to: '/faculty/students', icon: Users, label: 'Students' },
+    { to: '/faculty/assignments', icon: FileText, label: 'Assignments' },
+    { to: '/faculty/feedback', icon: MessageSquare, label: 'Feedback' },
     { to: '/faculty/ai-quiz', icon: Brain, label: 'AI Quiz Creator' },
-    { to: '/faculty/settings', icon: Settings, label: 'Settings' },
+    { to: '/faculty/code-submissions', icon: Code, label: 'Code Submissions' },
 ];
 
 export default function FacultySidebar() {
@@ -42,8 +47,9 @@ export default function FacultySidebar() {
     };
 
     return (
-        <div className="w-64 h-screen bg-white border-r border-border flex flex-col shadow-learnify">
-            <div className="p-6 border-b border-border bg-white">
+        <div className="w-64 h-screen bg-card border-r border-border flex flex-col shadow-learnify">
+            {/* Logo */}
+            <div className="p-6 border-b border-border bg-card">
                 <Link to="/faculty" className="flex items-center gap-3">
                     <motion.div
                         whileHover={{ scale: 1.05 }}
@@ -52,12 +58,13 @@ export default function FacultySidebar() {
                         <GraduationCap className="h-6 w-6 text-primary-foreground" />
                     </motion.div>
                     <div>
-                        <h1 className="text-xl font-bold text-black">Learnify</h1>
+                        <h1 className="text-xl font-bold text-foreground">Learnify</h1>
                         <p className="text-xs text-muted-foreground font-medium">Faculty Portal</p>
                     </div>
                 </Link>
             </div>
 
+            {/* Navigation */}
             <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
                 {navItems.map((item) => {
                     const Icon = item.icon;
@@ -81,7 +88,21 @@ export default function FacultySidebar() {
                 })}
             </nav>
 
-            <div className="p-4 border-t border-border bg-white">
+            {/* Settings and Logout */}
+            <div className="p-4 border-t border-border bg-card space-y-2">
+                <Link to="/faculty/settings" className="block">
+                    <Button
+                        variant={location.pathname === '/faculty/settings' ? 'default' : 'ghost'}
+                        className={`w-full justify-start gap-3 ${
+                            location.pathname === '/faculty/settings'
+                                ? 'bg-primary text-primary-foreground shadow-sm'
+                                : 'text-foreground hover:bg-primary/10'
+                        }`}
+                    >
+                        <Settings className="h-5 w-5 shrink-0" />
+                        <span className="font-medium">Settings</span>
+                    </Button>
+                </Link>
                 <Button
                     variant="ghost"
                     className="w-full justify-start gap-3 text-destructive hover:text-destructive hover:bg-destructive/10 font-medium"

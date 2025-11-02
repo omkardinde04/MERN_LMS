@@ -53,15 +53,19 @@ const SelectTrigger = React.forwardRef(({ className, children, value, onClick, .
     // Extract the display text from SelectValue children
     const displayValue = React.Children.toArray(children).find(child => child.type === SelectValue);
 
+    // Filter out custom props that shouldn't be passed to the button element
+    const { onValueChange, ...nativeProps } = props;
+
     return (
         <button
             ref={ref}
+            type="button"
             onClick={onClick}
             className={cn(
                 "flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
                 className
             )}
-            {...props}
+            {...nativeProps}
         >
             {React.Children.map(children, child => {
                 if (child.type === SelectValue) {

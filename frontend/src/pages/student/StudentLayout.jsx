@@ -4,9 +4,9 @@ import StudentSidebar from '@/components/StudentSidebar';
 
 export default function StudentLayout() {
     return (
-        <div className="flex h-screen overflow-hidden bg-white">
+        <div className="flex h-screen overflow-hidden bg-background">
             <StudentSidebar />
-            <main className="flex-1 overflow-y-auto bg-white">
+            <main className="flex-1 overflow-y-auto bg-background">
                 <div className="container mx-auto p-6">
                     <Outlet />
                 </div>

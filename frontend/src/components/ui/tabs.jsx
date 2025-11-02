@@ -19,20 +19,25 @@ const Tabs = ({ defaultValue, value, onValueChange, className, children }) => {
     );
 };
 
-const TabsList = React.forwardRef(({ className, activeTab, onValueChange, children, ...props }, ref) => (
-    <div
-        ref={ref}
-        className={cn(
-            "inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground",
-            className
-        )}
-        {...props}
-    >
-        {React.Children.map(children, child =>
-            React.cloneElement(child, { activeTab, onValueChange })
-        )}
-    </div>
-));
+const TabsList = React.forwardRef(({ className, activeTab, onValueChange, children, ...props }, ref) => {
+    // Filter out non-native props before spreading
+    const { onValueChange: _, activeTab: __, ...nativeProps } = props;
+    
+    return (
+        <div
+            ref={ref}
+            className={cn(
+                "inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground",
+                className
+            )}
+            {...nativeProps}
+        >
+            {React.Children.map(children, child =>
+                React.cloneElement(child, { activeTab, onValueChange })
+            )}
+        </div>
+    );
+});
 TabsList.displayName = "TabsList";
 
 const TabsTrigger = React.forwardRef(({ className, value, activeTab, onValueChange, ...props }, ref) => {

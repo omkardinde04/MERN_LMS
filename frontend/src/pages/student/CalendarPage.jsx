@@ -140,7 +140,11 @@ export default function CalendarPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Calendar Section */}
-        <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="lg:col-span-2">
+        <motion.div 
+          initial={{ opacity: 0, x: -20 }} 
+          animate={{ opacity: 1, x: 0 }} 
+          className="lg:col-span-2"
+        >
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -156,7 +160,7 @@ export default function CalendarPage() {
                 onSelect={setDate}
                 month={date}
                 onMonthChange={setDate}
-                className="rounded-md border w-full"
+                className="rounded-md border w-full flex justify-center"
                 modifiers={modifiers}
                 modifiersClassNames={modifierClassNames}
               />
@@ -212,8 +216,12 @@ export default function CalendarPage() {
           </Card>
         </motion.div>
 
-        {/* Sidebar Section */}
-        <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
+        {/* Events for Selected Day - Fixed positioning and responsiveness */}
+        <motion.div 
+          initial={{ opacity: 0, x: 20 }} 
+          animate={{ opacity: 1, x: 0 }} 
+          className="lg:col-span-1 space-y-6"
+        >
           {/* Color Legend */}
           <Card>
             <CardHeader>
@@ -239,7 +247,7 @@ export default function CalendarPage() {
                 {selectedDayEvents.length} {selectedDayEvents.length === 1 ? 'event' : 'events'}
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-3 max-h-[500px] overflow-y-auto">
               {selectedDayEvents.length > 0 ? (
                 selectedDayEvents.map((event) => {
                   const Icon = getEventIcon(event.type);
@@ -256,6 +264,12 @@ export default function CalendarPage() {
                         <p className="font-medium text-sm">{event.title}</p>
                       </div>
                       <p className="text-xs text-muted-foreground">{event.courseName || event.description}</p>
+                      <div className="mt-2 text-xs text-muted-foreground">
+                        {parseLocalDate(event.date).toLocaleTimeString('en-US', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </div>
                     </div>
                   );
                 })

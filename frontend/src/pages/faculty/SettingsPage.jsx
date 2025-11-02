@@ -12,7 +12,7 @@ import { User, Bell, Shield, Palette, Upload, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 
-export default function SettingsPage() {
+export default function FacultySettingsPage() {
     const user = getUser();
     const { theme, toggleTheme } = useTheme();
     const fileInputRef = useRef(null);

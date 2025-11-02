@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,8 +7,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { getLocalData, setLocalData } from '@/utils/storage';
-import { Plus, Edit, Trash2, Calendar, Clock } from 'lucide-react';
+import { Plus, Edit, Trash2, Calendar, Search } from 'lucide-react';
 import { toast } from 'sonner';
+import { motion } from 'framer-motion';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 const TIME_SLOTS = [
@@ -30,6 +31,9 @@ export default function TimetablePage() {
     const [editingSlot, setEditingSlot] = useState(null);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [slotToDelete, setSlotToDelete] = useState(null);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [dayFilter, setDayFilter] = useState('All Days');
+    const [typeFilter, setTypeFilter] = useState('All Types');
     const [formData, setFormData] = useState({
         courseName: '',
         courseCode: '',
@@ -39,6 +43,59 @@ export default function TimetablePage() {
         type: 'Lecture',
         class: '',
     });
+
+    // Group timetable by type
+    const groupedTimetable = useMemo(() => {
+        let filtered = timetable;
+
+        // Apply filters
+        if (searchQuery) {
+            filtered = filtered.filter(item =>
+                item.courseName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                item.room?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                item.day?.toLowerCase().includes(searchQuery.toLowerCase())
+            );
+        }
+
+        if (dayFilter !== 'All Days') {
+            filtered = filtered.filter(item => item.day === dayFilter);
+        }
+
+        if (typeFilter !== 'All Types') {
+            filtered = filtered.filter(item => item.type === typeFilter);
+        }
+
+        // Group by type
+        const groups = {
+            Lecture: [],
+            Lab: [],
+            Practical: []
+        };
+
+        filtered.forEach(item => {
+            const type = item.type || 'Lecture';
+            if (type === 'Tutorial') {
+                groups.Practical.push(item);
+            } else if (groups[type]) {
+                groups[type].push(item);
+            }
+        });
+
+        return groups;
+    }, [timetable, searchQuery, dayFilter, typeFilter]);
+
+    const getTypeColor = (type) => {
+        switch (type) {
+            case 'Lecture':
+                return 'bg-yellow-500';
+            case 'Lab':
+                return 'bg-blue-500';
+            case 'Practical':
+                return 'bg-purple-500';
+            default:
+                return 'bg-gray-500';
+        }
+    };
 
     const handleInputChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -104,6 +161,73 @@ export default function TimetablePage() {
 
     const getClassesForDayAndTime = (day, time) => {
         return timetable.filter(slot => slot.day === day && slot.time === time);
+    };
+
+    const renderTypeSection = (type, items) => {
+        if (items.length === 0) return null;
+
+        return (
+            <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="space-y-4"
+            >
+                <div className="flex items-center gap-3">
+                    <div className={`w-3 h-3 rounded-full ${getTypeColor(type)}`} />
+                    <h2 className="text-xl font-bold">
+                        {type}s ({items.length})
+                    </h2>
+                </div>
+
+                <div className="overflow-x-auto">
+                    <table className="w-full">
+                        <thead>
+                            <tr className="border-b border-border">
+                                <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Day</th>
+                                <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Time</th>
+                                <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Subject</th>
+                                <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Room</th>
+                                <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {items
+                                .sort((a, b) => {
+                                    const dayOrder = DAYS.indexOf(a.day) - DAYS.indexOf(b.day);
+                                    if (dayOrder !== 0) return dayOrder;
+                                    return a.time.localeCompare(b.time);
+                                })
+                                .map((item, index) => (
+                                    <tr key={index} className="border-b border-border/50 hover:bg-muted/50 transition-colors">
+                                        <td className="py-3 px-4 text-sm text-foreground">{item.day}</td>
+                                        <td className="py-3 px-4 text-sm text-foreground">{item.time}</td>
+                                        <td className="py-3 px-4 text-sm font-medium text-foreground">{item.courseName}</td>
+                                        <td className="py-3 px-4 text-sm text-muted-foreground">{item.room}</td>
+                                        <td className="py-3 px-4 text-sm text-right">
+                                            <div className="flex justify-end gap-2">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => handleEdit(item)}
+                                                >
+                                                    <Edit className="h-4 w-4" />
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => openDeleteDialog(item)}
+                                                >
+                                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                                </Button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                        </tbody>
+                    </table>
+                </div>
+            </motion.div>
+        );
     };
 
     return (
@@ -198,7 +322,7 @@ export default function TimetablePage() {
                                     <SelectContent>
                                         <SelectItem value="Lecture">Lecture</SelectItem>
                                         <SelectItem value="Lab">Lab</SelectItem>
-                                        <SelectItem value="Tutorial">Tutorial</SelectItem>
+                                        <SelectItem value="Practical">Practical</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -225,78 +349,48 @@ export default function TimetablePage() {
                 </Dialog>
             </div>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle>Weekly Schedule</CardTitle>
-                    <CardDescription>Your classes for the week</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div className="overflow-x-auto">
-                        <table className="w-full border-collapse">
-                            <thead>
-                                <tr className="border-b">
-                                    <th className="p-3 text-left font-semibold bg-muted">Time</th>
-                                    {DAYS.map(day => (
-                                        <th key={day} className="p-3 text-left font-semibold bg-muted min-w-[150px]">
-                                            {day}
-                                        </th>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {TIME_SLOTS.map(time => (
-                                    <tr key={time} className="border-b">
-                                        <td className="p-3 font-medium text-sm bg-muted/50 whitespace-nowrap">
-                                            {time}
-                                        </td>
-                                        {DAYS.map(day => {
-                                            const classes = getClassesForDayAndTime(day, time);
-                                            return (
-                                                <td key={`${day}-${time}`} className="p-2">
-                                                    {classes.map(cls => (
-                                                        <div
-                                                            key={cls.id}
-                                                            className="bg-primary/10 border border-primary/20 rounded p-2 mb-2 last:mb-0 group relative"
-                                                        >
-                                                            <div className="flex items-start justify-between gap-2">
-                                                                <div className="flex-1 min-w-0">
-                                                                    <p className="font-medium text-sm truncate">{cls.courseName}</p>
-                                                                    <p className="text-xs text-muted-foreground">{cls.type} • {cls.room}</p>
-                                                                    {cls.class && (
-                                                                        <p className="text-xs text-muted-foreground">Class {cls.class}</p>
-                                                                    )}
-                                                                </div>
-                                                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        size="icon"
-                                                                        className="h-6 w-6"
-                                                                        onClick={() => handleEdit(cls)}
-                                                                    >
-                                                                        <Edit className="h-3 w-3" />
-                                                                    </Button>
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        size="icon"
-                                                                        className="h-6 w-6"
-                                                                        onClick={() => openDeleteDialog(cls)}
-                                                                    >
-                                                                        <Trash2 className="h-3 w-3 text-destructive" />
-                                                                    </Button>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </td>
-                                            );
-                                        })}
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </CardContent>
-            </Card>
+            {/* Search and Filters */}
+            <div className="flex flex-col sm:flex-row gap-4">
+                <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                        placeholder="Search subject, room, day"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pl-9"
+                    />
+                </div>
+                <Select value={dayFilter} onValueChange={setDayFilter}>
+                    <SelectTrigger className="w-full sm:w-[180px]">
+                        <Calendar className="h-4 w-4 mr-2" />
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="All Days">All Days</SelectItem>
+                        {DAYS.map(day => (
+                            <SelectItem key={day} value={day}>{day}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                <Select value={typeFilter} onValueChange={setTypeFilter}>
+                    <SelectTrigger className="w-full sm:w-[180px]">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="All Types">All Types</SelectItem>
+                        <SelectItem value="Lecture">Lectures</SelectItem>
+                        <SelectItem value="Lab">Labs</SelectItem>
+                        <SelectItem value="Practical">Practicals</SelectItem>
+                    </SelectContent>
+                </Select>
+            </div>
+
+            {/* Grouped Sections */}
+            <div className="space-y-8">
+                {renderTypeSection('Lecture', groupedTimetable.Lecture)}
+                {renderTypeSection('Lab', groupedTimetable.Lab)}
+                {renderTypeSection('Practical', groupedTimetable.Practical)}
+            </div>
 
             {timetable.length === 0 && (
                 <Card className="p-12 text-center">

@@ -7,6 +7,7 @@ import {
     Code,
     TrendingUp,
     Calendar,
+    Clock,
     MessageSquare,
     Brain,
     Settings,
@@ -26,6 +27,7 @@ const navItems = [
     { to: '/student/grades', icon: TrendingUp, label: 'Grades' },
     { to: '/student/quizzes', icon: Brain, label: 'Quizzes' },
     { to: '/student/calendar', icon: Calendar, label: 'Calendar' },
+    { to: '/student/timetable', icon: Clock, label: 'Timetable' },
     { to: '/student/feedback', icon: MessageSquare, label: 'Feedback' },
 ];
 
@@ -47,9 +49,9 @@ export default function StudentSidebar() {
     };
 
     return (
-        <div className="w-64 h-screen bg-white border-r border-border flex flex-col shadow-learnify">
+        <div className="w-64 h-screen bg-card border-r border-border flex flex-col shadow-learnify">
             {/* Logo */}
-            <div className="p-6 border-b border-border bg-white">
+            <div className="p-6 border-b border-border bg-card">
                 <Link to="/student" className="flex items-center gap-3">
                     <motion.div
                         whileHover={{ scale: 1.05 }}
@@ -58,7 +60,7 @@ export default function StudentSidebar() {
                         <GraduationCap className="h-6 w-6 text-primary-foreground" />
                     </motion.div>
                     <div>
-                        <h1 className="text-xl font-bold text-black">Learnify</h1>
+                        <h1 className="text-xl font-bold text-foreground">Learnify</h1>
                         <p className="text-xs text-muted-foreground font-medium">Student Portal</p>
                     </div>
                 </Link>
@@ -89,7 +91,7 @@ export default function StudentSidebar() {
             </nav>
 
             {/* Settings and Logout */}
-            <div className="p-4 border-t border-border bg-white space-y-2">
+            <div className="p-4 border-t border-border bg-card space-y-2">
                 <Link to="/student/settings" className="block">
                     <Button
                         variant={location.pathname === '/student/settings' ? 'default' : 'ghost'}

@@ -4,11 +4,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { getUser, getLocalData } from '@/utils/storage';
-import { BookOpen, FileText, Code, Calendar, TrendingUp, MessageSquare, Bell, ChevronRight } from 'lucide-react';
+import { BookOpen, FileText, Code, Calendar, TrendingUp, MessageSquare, Bell, ChevronRight, Moon, Sun, Award, Zap, Target } from 'lucide-react';
+import { useTheme } from '@/contexts/ThemeContext';
 import { motion } from 'framer-motion';
 
 export default function HomePage() {
     const navigate = useNavigate();
+    const { theme, toggleTheme } = useTheme();
     const user = getUser();
     const assignments = getLocalData('assignments', []);
     const announcements = getLocalData('announcements', []);
@@ -30,6 +32,13 @@ export default function HomePage() {
         .sort((a, b) => new Date(a.date) - new Date(b.date))
         .filter(e => new Date(e.date) >= new Date())
         .slice(0, 3);
+
+    // Quick stats data
+    const quickStats = [
+        { icon: Zap, label: 'Fast Coder', value: '92%', description: 'Above average speed', color: 'bg-yellow-500' },
+        { icon: Target, label: 'Consistent Learner', value: '88%', description: 'Regular participation', color: 'bg-green-500' },
+        { icon: Award, label: 'Top Performer', value: '95%', description: 'High scores', color: 'bg-blue-500' },
+    ];
 
     const quickActions = [
         { icon: BookOpen, label: 'My Courses', path: '/student/courses', color: 'bg-blue-500' },
@@ -67,21 +76,58 @@ export default function HomePage() {
                 className="flex items-center justify-between"
             >
                 <div>
-                    <h1 className="text-3xl font-bold text-black">Welcome back, {user?.fullName?.split(' ')[0]}! 👋</h1>
+                    <h1 className="text-3xl font-bold">Welcome back, {user?.fullName?.split(' ')[0]}! 👋</h1>
                     <p className="text-muted-foreground mt-1 font-medium">Here's what's happening with your courses today.</p>
                 </div>
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    className="rounded-full p-0"
-                    onClick={() => navigate('/student/settings')}
-                >
-                    <Avatar className="h-12 w-12 cursor-pointer border-2 border-primary shadow-sm hover:shadow-md transition-shadow">
-                        <AvatarFallback className="bg-primary text-primary-foreground font-bold text-lg">
-                            {user?.fullName?.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() || 'U'}
-                        </AvatarFallback>
-                    </Avatar>
-                </Button>
+                <div className="flex items-center gap-2">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={toggleTheme}
+                        className="rounded-full"
+                    >
+                        {theme === 'light' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="rounded-full p-0"
+                        onClick={() => navigate('/student/settings')}
+                    >
+                        <Avatar className="h-12 w-12 cursor-pointer border-2 border-primary shadow-sm hover:shadow-md transition-shadow">
+                            <AvatarFallback className="bg-primary text-primary-foreground font-bold text-lg">
+                                {user?.fullName?.charAt(0) || 'U'}
+                            </AvatarFallback>
+                        </Avatar>
+                    </Button>
+                </div>
+            </motion.div>
+
+            {/* Quick Stats */}
+            <motion.div
+                variants={containerVariants}
+                initial="hidden"
+                animate="visible"
+            >
+                <h2 className="text-xl font-bold mb-4">Performance Overview</h2>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {quickStats.map((stat, index) => (
+                        <motion.div key={index} variants={itemVariants}>
+                            <Card className="border-2 border-border hover:border-primary/30 transition-colors">
+                                <CardContent className="p-5 flex items-center gap-4">
+                                    <div className={`${stat.color} p-3 rounded-lg`}>
+                                        <stat.icon className="h-6 w-6 text-white" />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm text-muted-foreground">{stat.label}</p>
+                                        <p className="text-2xl font-bold">{stat.value}</p>
+                                        <p className="text-xs text-muted-foreground">{stat.description}</p>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </motion.div>
+                    ))}
+                </div>
             </motion.div>
 
             {/* Quick Actions */}
@@ -90,7 +136,7 @@ export default function HomePage() {
                 initial="hidden"
                 animate="visible"
             >
-                <h2 className="text-xl font-bold text-black mb-4">Quick Actions</h2>
+                <h2 className="text-xl font-bold mb-4">Quick Actions</h2>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                     {quickActions.map((action, index) => (
                         <motion.div key={index} variants={itemVariants}>

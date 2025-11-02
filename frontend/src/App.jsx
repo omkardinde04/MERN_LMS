@@ -20,6 +20,7 @@ import StudentCalendar from './pages/student/CalendarPage';
 import StudentFeedback from './pages/student/FeedbackPage';
 import StudentQuizzes from './pages/student/QuizzesPage';
 import StudentSettings from './pages/student/SettingsPage';
+import StudentTimetable from './pages/student/TimetablePage';
 
 // Faculty Pages
 import FacultyLayout from './pages/faculty/FacultyLayout';
@@ -27,7 +28,12 @@ import FacultyHome from './pages/faculty/HomePage';
 import FacultyCourses from './pages/faculty/CoursesPage';
 import FacultyTimetable from './pages/faculty/TimetablePage';
 import FacultyStudents from './pages/faculty/StudentsPage';
+import FacultyAssignments from './pages/faculty/AssignmentsPage';
+import FacultyFeedback from './pages/faculty/FeedbackPage';
 import FacultyAIQuiz from './pages/faculty/AIQuizPage';
+import FacultySettings from './pages/faculty/SettingsPage';
+import FacultyCodeSubmissions from './pages/faculty/CodeSubmissionsPage';
+import FacultyCreateAssignment from './pages/faculty/CreateAssignmentPage';
 
 function App() {
   useEffect(() => {
@@ -57,6 +63,7 @@ function App() {
             <Route path="coding-zone" element={<StudentCodingZone />} />
             <Route path="grades" element={<StudentGrades />} />
             <Route path="calendar" element={<StudentCalendar />} />
+            <Route path="timetable" element={<StudentTimetable />} />
             <Route path="feedback" element={<StudentFeedback />} />
             <Route path="quizzes" element={<StudentQuizzes />} />
             <Route path="settings" element={<StudentSettings />} />
@@ -75,8 +82,12 @@ function App() {
             <Route path="courses" element={<FacultyCourses />} />
             <Route path="timetable" element={<FacultyTimetable />} />
             <Route path="students" element={<FacultyStudents />} />
+            <Route path="assignments" element={<FacultyAssignments />} />
+            <Route path="feedback" element={<FacultyFeedback />} />
             <Route path="ai-quiz" element={<FacultyAIQuiz />} />
-            <Route path="settings" element={<StudentSettings />} />
+            <Route path="code-submissions" element={<FacultyCodeSubmissions />} />
+            <Route path="create-assignment" element={<FacultyCreateAssignment />} />
+            <Route path="settings" element={<FacultySettings />} />
           </Route>
 
           {/* 404 */}
