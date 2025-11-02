@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { getLocalData, setLocalData, getUser } from '@/utils/storage';
-import { Plus, Edit, Trash2, Users, BookOpen, Clock, Link as LinkIcon, Video, Bell, ArrowLeft, Copy, ExternalLink, Search, Laptop, GraduationCap } from 'lucide-react';
+import { Plus, Edit, Trash2, Users, BookOpen, Clock, Link as LinkIcon, Video, Bell, ArrowLeft, Copy, ExternalLink, Search, Laptop, GraduationCap, RefreshCw, Key } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 
@@ -37,6 +37,7 @@ export default function CoursesPage() {
     const [announcementContent, setAnnouncementContent] = useState('');
     const [meetingTitle, setMeetingTitle] = useState('');
     const [meetingPlatform, setMeetingPlatform] = useState('google');
+    const [courseCode, setCourseCode] = useState('');
 
     // Get course-specific data
     const getCourseStudents = (courseId) => {
@@ -113,10 +114,9 @@ export default function CoursesPage() {
     };
 
     const handleShareLink = (course) => {
-        // Generate a unique enrollment link for the course
-        const enrollmentCode = `${course.code}-${course.id.toString().slice(-6)}`;
-        const baseUrl = window.location.origin;
-        const enrollmentLink = `${baseUrl}/enroll/${enrollmentCode}`;
+        // Generate a unique enrollment code
+        const randomPart = Math.random().toString(36).substring(2, 8).toUpperCase();
+        const enrollmentCode = `${course.code}-${randomPart}`;
 
         // Save the enrollment code mapping
         const allEnrollmentCodes = getLocalData('enrollmentCodes', {});
@@ -124,16 +124,19 @@ export default function CoursesPage() {
             courseId: course.id,
             courseName: course.name,
             courseCode: course.code,
-            createdAt: new Date().toISOString()
+            instructor: getUser()?.fullName,
+            createdAt: new Date().toISOString(),
+            active: true
         };
         setLocalData('enrollmentCodes', allEnrollmentCodes);
 
-        // Save the link for this course
-        const allLinks = getLocalData('courseLinks', {});
-        allLinks[course.id] = enrollmentLink;
-        setLocalData('courseLinks', allLinks);
+        // Save the code for this course
+        const courseCodes = getLocalData('courseCodes', {});
+        courseCodes[course.id] = enrollmentCode;
+        setLocalData('courseCodes', courseCodes);
 
-        toast.success('Course enrollment link generated successfully');
+        toast.success('New enrollment code generated');
+        return enrollmentCode;
     };
 
     const handleRegenerateLink = (course) => {
@@ -246,7 +249,7 @@ export default function CoursesPage() {
     if (selectedCourse) {
         const courseStudents = getCourseStudents(selectedCourse.id);
         const courseAnnouncements = getCourseAnnouncements(selectedCourse.id);
-        const savedLink = getLocalData('courseLinks', {})[selectedCourse.id] || '';
+        const savedCode = getLocalData('courseCodes', {})[selectedCourse.id] || '';
 
         return (
             <div className="space-y-6">
@@ -267,7 +270,7 @@ export default function CoursesPage() {
                             <TabsList className="grid w-full grid-cols-4">
                                 <TabsTrigger value="classroom">
                                     <LinkIcon className="h-4 w-4 mr-2" />
-                                    Enrollment Link
+                                    Enrollment Code
                                 </TabsTrigger>
                                 <TabsTrigger value="students">
                                     <Users className="h-4 w-4 mr-2" />
@@ -286,20 +289,20 @@ export default function CoursesPage() {
                             <TabsContent value="classroom" className="space-y-4">
                                 <div className="space-y-4">
                                     <div>
-                                        <Label className="text-base font-semibold">Course Enrollment Link</Label>
+                                        <Label className="text-base font-semibold">Course Enrollment Code</Label>
                                         <p className="text-sm text-muted-foreground mb-3">
-                                            Share this link with students to allow them to enroll in your course
+                                            Share this code with students to allow them to enroll in your course
                                         </p>
                                     </div>
 
-                                    {savedLink ? (
+                                    {savedCode ? (
                                         <div className="space-y-3">
                                             <div className="p-4 bg-muted rounded-lg">
                                                 <div className="flex items-start justify-between gap-3">
-                                                    <div className="flex-1 overflow-hidden">
-                                                        <p className="text-sm font-medium mb-2">Enrollment Link:</p>
-                                                        <code className="text-sm bg-background px-3 py-2 rounded border block overflow-x-auto">
-                                                            {savedLink}
+                                                    <div className="flex-1">
+                                                        <p className="text-sm font-medium mb-2">Current Enrollment Code:</p>
+                                                        <code className="text-2xl font-mono bg-background px-4 py-2 rounded border block">
+                                                            {savedCode}
                                                         </code>
                                                     </div>
                                                 </div>
@@ -308,38 +311,39 @@ export default function CoursesPage() {
                                                 <Button
                                                     variant="outline"
                                                     className="flex-1"
-                                                    onClick={() => handleCopyLink(selectedCourse)}
+                                                    onClick={() => {
+                                                        navigator.clipboard.writeText(savedCode);
+                                                        toast.success('Code copied to clipboard');
+                                                    }}
                                                 >
                                                     <Copy className="h-4 w-4 mr-2" />
-                                                    Copy Link
+                                                    Copy Code
                                                 </Button>
                                                 <Button
                                                     variant="outline"
                                                     className="flex-1"
-                                                    onClick={() => handleRegenerateLink(selectedCourse)}
+                                                    onClick={() => {
+                                                        const newCode = handleShareLink(selectedCourse);
+                                                        setCourseCode(newCode);
+                                                    }}
                                                 >
-                                                    <LinkIcon className="h-4 w-4 mr-2" />
-                                                    Regenerate Link
+                                                    <RefreshCw className="h-4 w-4 mr-2" />
+                                                    Generate New Code
                                                 </Button>
-                                            </div>
-                                            <div className="p-3 bg-primary/10 rounded-lg border border-primary/20">
-                                                <p className="text-sm">
-                                                    <span className="font-semibold">Enrollment Code:</span> {savedLink.split('/').pop()}
-                                                </p>
-                                                <p className="text-xs text-muted-foreground mt-1">
-                                                    Students can use this code to join the course
-                                                </p>
                                             </div>
                                         </div>
                                     ) : (
                                         <div className="text-center py-8">
-                                            <LinkIcon className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+                                            <Key className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
                                             <p className="text-sm text-muted-foreground mb-4">
-                                                No enrollment link generated yet
+                                                No enrollment code generated yet
                                             </p>
-                                            <Button onClick={() => handleShareLink(selectedCourse)}>
-                                                <LinkIcon className="h-4 w-4 mr-2" />
-                                                Generate Enrollment Link
+                                            <Button onClick={() => {
+                                                const code = handleShareLink(selectedCourse);
+                                                setCourseCode(code);
+                                            }}>
+                                                <Key className="h-4 w-4 mr-2" />
+                                                Generate Enrollment Code
                                             </Button>
                                         </div>
                                     )}

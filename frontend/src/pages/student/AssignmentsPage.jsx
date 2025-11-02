@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -91,6 +91,70 @@ export default function AssignmentsPage() {
         setSelectedAssignment(assignment);
         setUploadDialogOpen(true);
     };
+
+    // Add this useEffect after state declarations to sync submissions into student assignments
+    useEffect(() => {
+        const syncFromSubmissions = () => {
+            try {
+                const subs = getLocalData('assignmentSubmissions', {});
+                const myUpdatedAssignments = getLocalData('assignments', []).map(a => ({ ...a }));
+
+                Object.keys(subs).forEach(assignmentId => {
+                    const arr = subs[assignmentId] || [];
+                    const mySub = arr.find(s => String(s.studentId) === String(user?.id));
+                    if (mySub) {
+                        const idx = myUpdatedAssignments.findIndex(it => String(it.id) === String(assignmentId));
+                        if (idx !== -1) {
+                            myUpdatedAssignments[idx] = {
+                                ...myUpdatedAssignments[idx],
+                                status: mySub.marks ? 'graded' : (myUpdatedAssignments[idx].status || 'submitted'),
+                                score: mySub.marks ?? myUpdatedAssignments[idx].score,
+                                feedback: mySub.feedback ?? myUpdatedAssignments[idx].feedback,
+                                plagiarismReport: mySub.plagiarismReport ?? myUpdatedAssignments[idx].plagiarismReport,
+                                plagiarismReportedAt: mySub.plagiarismReportedAt ?? myUpdatedAssignments[idx].plagiarismReportedAt
+                            };
+                        }
+                    }
+                });
+
+                // persist and update component state
+                setLocalData('assignments', myUpdatedAssignments);
+                setAssignments(myUpdatedAssignments);
+            } catch (err) {
+                console.warn('syncFromSubmissions failed', err);
+            }
+        };
+
+        // initial sync
+        syncFromSubmissions();
+
+        // listen cross-tab
+        const onStorage = (e) => {
+            if (!e.key) return;
+            if (e.key === 'assignmentSubmissions_lastUpdate' || e.key === 'assignmentSubmissions') {
+                syncFromSubmissions();
+            }
+        };
+
+        // custom same-tab event
+        const onLocalDataChanged = (e) => {
+            const key = e?.detail?.key;
+            if (!key) return;
+            if (key === 'assignmentSubmissions') syncFromSubmissions();
+        };
+
+        window.addEventListener('storage', onStorage);
+        window.addEventListener('local-data-changed', onLocalDataChanged);
+
+        // poll fallback
+        const interval = setInterval(syncFromSubmissions, 2000);
+
+        return () => {
+            clearInterval(interval);
+            window.removeEventListener('storage', onStorage);
+            window.removeEventListener('local-data-changed', onLocalDataChanged);
+        };
+    }, [user]);
 
     return (
         <div className="space-y-6">
@@ -367,6 +431,32 @@ export default function AssignmentsPage() {
                                 </div>
                             )}
                         </div>
+
+                        {previewAssignment && previewAssignment.plagiarismReport && (
+                            <Card className="mb-4 bg-muted/30">
+                                <CardContent>
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm font-medium">Plagiarism Report</p>
+                                            <p className="text-xs text-muted-foreground">Similarity: {previewAssignment.plagiarismReport.similarity}%</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs text-muted-foreground">
+                                                Reported: {previewAssignment.plagiarismReportedAt ? new Date(previewAssignment.plagiarismReportedAt).toLocaleString() : '—'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="mt-2 text-xs space-y-1">
+                                        {previewAssignment.plagiarismReport.sources?.map((s, i) => (
+                                            <div key={i} className="flex justify-between">
+                                                <span>{s.name}</span>
+                                                <span className="text-muted-foreground">{s.similarity}%</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )}
                     </DialogContent>
                 </Dialog>
             )}

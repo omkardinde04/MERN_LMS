@@ -8,7 +8,10 @@ import { motion } from 'framer-motion';
 
 export default function StudentsPage() {
     const courseStudents = getLocalData('courseStudents', {});
-    const courses = getLocalData('courses', []);
+    const enrollmentCodes = getLocalData('enrollmentCodes', {});
+    const allCourses = getLocalData('allCourses', []); 
+    // Only show courses where students have properly enrolled using enrollment codes
+    const courses = allCourses.filter(course => courseStudents[course.id]?.length > 0);
     const [searchQuery, setSearchQuery] = useState('');
 
     // Group students by course with actual enrolled students
@@ -21,7 +24,9 @@ export default function StudentsPage() {
                 const query = searchQuery.toLowerCase();
                 return (
                     student.name?.toLowerCase().includes(query) ||
-                    student.email?.toLowerCase().includes(query)
+                    student.email?.toLowerCase().includes(query) ||
+                    course.name?.toLowerCase().includes(query) ||
+                    course.code?.toLowerCase().includes(query)
                 );
             })
             : enrolledStudents;

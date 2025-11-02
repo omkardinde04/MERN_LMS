@@ -149,8 +149,44 @@ export default function AssignmentsPage() {
             toast.error('Please enter marks');
             return;
         }
-        toast.success(`Marks (${marks}/100) sent to ${selectedSubmission.studentName}`);
-        handleCloseGrading();
+
+        try {
+            const subs = getLocalData('assignmentSubmissions', {});
+            const arr = subs[selectedAssignment.id] || [];
+            const idx = arr.findIndex(s => s.id === selectedSubmission.id);
+
+            if (idx === -1) {
+                toast.error('Submission not found');
+                handleCloseGrading();
+                return;
+            }
+
+            // update submission with marks/feedback
+            arr[idx] = {
+                ...arr[idx],
+                marks: Number(marks),
+                feedback: feedback || '',
+                gradedAt: new Date().toISOString()
+            };
+            subs[selectedAssignment.id] = arr;
+            setLocalData('assignmentSubmissions', subs);
+
+            // update local state so faculty UI refreshes immediately
+            setAssignmentSubmissions(getLocalData('assignmentSubmissions', {}));
+
+            // notify other tabs (native storage event via helper key)
+            try { window.localStorage.setItem('assignmentSubmissions_lastUpdate', String(Date.now())); } catch (e) {}
+
+            // dispatch custom same-tab event for immediate updates
+            try { window.dispatchEvent(new CustomEvent('local-data-changed', { detail: { key: 'assignmentSubmissions' } })); } catch (e) {}
+
+            toast.success(`Marks (${marks}) sent to ${selectedSubmission.studentName}`);
+        } catch (err) {
+            console.error('grading error', err);
+            toast.error('Failed to send marks');
+        } finally {
+            handleCloseGrading();
+        }
     };
 
     const handleSendPlagiarismReport = () => {
@@ -158,8 +194,38 @@ export default function AssignmentsPage() {
             toast.error('Please run plagiarism check first');
             return;
         }
-        toast.success(`Plagiarism report (${plagiarismReport.similarity}% similarity) sent to ${selectedSubmission.studentName}`);
-        handleClosePreview();
+
+        try {
+            const subs = getLocalData('assignmentSubmissions', {});
+            const arr = subs[selectedAssignment.id] || [];
+            const idx = arr.findIndex(s => s.id === selectedSubmission.id);
+            if (idx === -1) {
+                toast.error('Submission not found');
+                handleClosePreview();
+                return;
+            }
+
+            arr[idx] = {
+                ...arr[idx],
+                plagiarismReport,
+                plagiarismReportedAt: new Date().toISOString()
+            };
+            subs[selectedAssignment.id] = arr;
+            setLocalData('assignmentSubmissions', subs);
+
+            // update faculty UI immediately
+            setAssignmentSubmissions(getLocalData('assignmentSubmissions', {}));
+
+            try { window.localStorage.setItem('assignmentSubmissions_lastUpdate', String(Date.now())); } catch (e) {}
+            try { window.dispatchEvent(new CustomEvent('local-data-changed', { detail: { key: 'assignmentSubmissions' } })); } catch (e) {}
+
+            toast.success(`Plagiarism report sent to ${selectedSubmission.studentName}`);
+        } catch (err) {
+            console.error('plagiarism send error', err);
+            toast.error('Failed to send plagiarism report');
+        } finally {
+            handleClosePreview();
+        }
     };
 
     const getSubmissionStats = (assignmentId) => {
