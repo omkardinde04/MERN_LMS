@@ -1,21 +1,25 @@
-import React, { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { getLocalData, setLocalData } from '@/utils/storage';
-import { Plus, Eye, Download, CheckCircle, XCircle, Calendar, Users, FileText, Send, FileCheck } from 'lucide-react';
+import { Plus, Eye, Download, Calendar, Users, FileText, Send, FileCheck, Trash2 } from 'lucide-react';
+import { X } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from '@/components/ui/alert-dialog';
 
 export default function AssignmentsPage() {
     const [assignments, setAssignments] = useState(getLocalData('facultyAssignments', []));
-    const assignmentSubmissions = getLocalData('assignmentSubmissions', {});
+    const [assignmentToDelete, setAssignmentToDelete] = useState(null);
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [assignmentSubmissions, setAssignmentSubmissions] = useState(getLocalData('assignmentSubmissions', {}));
     const [selectedAssignment, setSelectedAssignment] = useState(null);
     // create assignment form state
     const [newTitle, setNewTitle] = useState('');
@@ -32,6 +36,27 @@ export default function AssignmentsPage() {
     const [feedback, setFeedback] = useState('');
     const [isPlagiarismChecking, setIsPlagiarismChecking] = useState(false);
     const [plagiarismReport, setPlagiarismReport] = useState(null);
+
+    // keep assignmentSubmissions in sync with localStorage (storage event + periodic poll)
+    useEffect(() => {
+        const sync = () => {
+            setAssignmentSubmissions(getLocalData('assignmentSubmissions', {}));
+        };
+        // initial sync
+        sync();
+
+        const onStorage = (e) => {
+            if (!e.key || e.key.startsWith('assignmentSubmissions') || e.key === 'assignmentSubmissions_lastUpdate') {
+                sync();
+            }
+        };
+        window.addEventListener('storage', onStorage);
+        const interval = setInterval(sync, 2000); // poll so SPA updates in same tab
+        return () => {
+            window.removeEventListener('storage', onStorage);
+            clearInterval(interval);
+        };
+    }, []);
 
     const handleViewSubmissions = (assignment) => {
         setSelectedAssignment(assignment);
@@ -63,30 +88,40 @@ export default function AssignmentsPage() {
     };
 
     const handleDownload = (submission) => {
-        // Simulate file download
-        const blob = new Blob([submission.content || 'Assignment content'], { type: 'text/plain' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = submission.fileName || 'submission.pdf';
-        a.click();
-        toast.success('File downloaded successfully');
+        // If submission contains a data URL, download directly
+        const dataUrl = submission?.fileData || submission?.fileDataUrl || submission?.data;
+        if (dataUrl) {
+            const a = document.createElement('a');
+            a.href = dataUrl;
+            a.download = submission.fileName || 'submission';
+            a.click();
+            toast.success('File downloaded successfully');
+            return;
+        }
+        // Fallback: create a blob from content if available
+        const content = submission?.content || submission?.text;
+        if (content) {
+            const blob = new Blob([content], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = submission.fileName || 'submission.txt';
+            a.click();
+            URL.revokeObjectURL(url);
+            toast.success('File downloaded successfully');
+            return;
+        }
+        toast.error('No file available to download');
     };
 
     const handlePlagiarismCheck = async (submission) => {
         setIsPlagiarismChecking(true);
         setPlagiarismReport(null);
-
-        // Simulate API call to plagiarism checker
         setTimeout(() => {
             const mockReport = {
-                similarity: Math.floor(Math.random() * 30) + 5, // 5-35%
-                sources: [
-                    { name: 'Wikipedia - Network Protocols', similarity: 12 },
-                    { name: 'GeeksforGeeks - TCP/IP', similarity: 8 },
-                    { name: 'Previous Submission 2024', similarity: 6 }
-                ],
-                status: 'completed'
+                similarity: Math.floor(Math.random() * 30) + 5,
+                sources: [{ name: 'Wikipedia - Network Protocols', similarity: 12 }],
+                status: 'completed',
             };
             setPlagiarismReport(mockReport);
             setIsPlagiarismChecking(false);
@@ -106,10 +141,7 @@ export default function AssignmentsPage() {
             toast.error('Please enter marks');
             return;
         }
-
-        // Update submission with marks and feedback
-        const gradeMessage = `Marks (${marks}/100) sent to ${selectedSubmission.studentName}`;
-        toast.success(gradeMessage);
+        toast.success(`Marks (${marks}/100) sent to ${selectedSubmission.studentName}`);
         handleCloseGrading();
     };
 
@@ -118,18 +150,16 @@ export default function AssignmentsPage() {
             toast.error('Please run plagiarism check first');
             return;
         }
-
         toast.success(`Plagiarism report (${plagiarismReport.similarity}% similarity) sent to ${selectedSubmission.studentName}`);
         handleClosePreview();
     };
 
     const getSubmissionStats = (assignmentId) => {
-        const submissions = assignmentSubmissions[assignmentId] || [];
+        const submissions = (assignmentSubmissions && assignmentSubmissions[assignmentId]) || [];
         const submitted = submissions.length;
-        const totalStudents = 45; // This should come from course enrollment
-        const pending = totalStudents - submitted;
+        const totalStudents = 45;
+        const pending = Math.max(totalStudents - submitted, 0);
         const percentage = totalStudents > 0 ? (submitted / totalStudents) * 100 : 0;
-
         return { submitted, pending, totalStudents, percentage };
     };
 
@@ -139,23 +169,18 @@ export default function AssignmentsPage() {
             toast.error('Please provide title, course and due date');
             return;
         }
-
         const id = Date.now();
         const assignment = {
             id,
             title: newTitle.trim(),
             course: newCourse.trim(),
             dueDate: new Date(newDueDate).toISOString(),
-            description: newDescription.trim(),
+            description: newDescription?.trim() || '',
             totalMarks: newTotalMarks ? Number(newTotalMarks) : 100,
         };
-
-        // save to facultyAssignments (for faculty UI)
         const updatedFaculty = [assignment, ...assignments];
         setAssignments(updatedFaculty);
         setLocalData('facultyAssignments', updatedFaculty);
-
-        // also save to shared 'assignments' so student views / calendar pick it up
         const shared = getLocalData('assignments', []);
         const sharedItem = {
             id,
@@ -167,15 +192,78 @@ export default function AssignmentsPage() {
             totalMarks: assignment.totalMarks,
         };
         setLocalData('assignments', [sharedItem, ...shared]);
-
         toast.success('Assignment created successfully');
-        // reset form & close
         setNewTitle('');
         setNewCourse('');
         setNewDueDate('');
         setNewDescription('');
         setNewTotalMarks('');
         setIsCreateDialogOpen(false);
+    };
+
+    // Open confirmation for delete
+    const confirmDeleteAssignment = (assignment) => {
+        setAssignmentToDelete(assignment);
+        setDeleteDialogOpen(true);
+    };
+
+    // Perform deletion after confirmation
+    const handleDeleteAssignment = () => {
+        if (!assignmentToDelete) return;
+        const updated = assignments.filter((a) => a.id !== assignmentToDelete.id);
+        setAssignments(updated);
+        setLocalData('facultyAssignments', updated);
+        const shared = getLocalData('assignments', []).filter((a) => a.id !== assignmentToDelete.id);
+        setLocalData('assignments', shared);
+        toast.success('Assignment deleted successfully');
+        setDeleteDialogOpen(false);
+        setAssignmentToDelete(null);
+    };
+
+    // Helper: render preview for a submission (image/pdf/data URL or fallback)
+    const renderSubmissionPreview = (submission) => {
+        if (!submission) return <div className="p-6 text-sm text-muted-foreground">No submission selected</div>;
+        const dataUrl = submission.fileData || submission.fileDataUrl || submission.data || submission.fileData; // possible keys
+        const fileName = submission.fileName || '';
+        const fileType = submission.fileType || '';
+
+        if (dataUrl && (fileType.startsWith('image/') || /\.(jpe?g|png|gif|bmp|webp)$/i.test(fileName))) {
+            return <img src={dataUrl} alt={fileName} className="w-full rounded-lg object-contain" />;
+        }
+
+        if (dataUrl && (fileType === 'application/pdf' || /\.pdf$/i.test(fileName))) {
+            return <iframe src={dataUrl} className="w-full h-[60vh] rounded-lg border" title={fileName || 'PDF preview'} />;
+        }
+
+        if (dataUrl) {
+            // generic data URL or unknown type: offer download + raw text preview if small
+            const maybeText = submission.content || submission.text;
+            return (
+                <div className="p-4">
+                    {maybeText ? (
+                        <pre className="text-sm whitespace-pre-wrap font-sans">{maybeText}</pre>
+                    ) : (
+                        <div className="text-center p-8">
+                            <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+                            <p className="text-muted-foreground mb-4">Preview not available for this file type.</p>
+                            <div className="flex justify-center">
+                                <Button onClick={() => {
+                                    const a = document.createElement('a');
+                                    a.href = dataUrl;
+                                    a.download = fileName || 'file';
+                                    a.click();
+                                }}>
+                                    <Download className="h-4 w-4 mr-2" />
+                                    Download File
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        return <div className="p-6 text-sm text-muted-foreground">No preview available for this submission.</div>;
     };
 
     return (
@@ -215,14 +303,24 @@ export default function AssignmentsPage() {
                                                 <h3 className="text-xl font-bold mb-1">{assignment.title}</h3>
                                                 <p className="text-sm text-muted-foreground">{assignment.course}</p>
                                             </div>
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() => handleViewSubmissions(assignment)}
-                                            >
-                                                <Eye className="h-4 w-4 mr-2" />
-                                                View Submissions
-                                            </Button>
+                                            <div className="flex items-center gap-2">
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => handleViewSubmissions(assignment)}
+                                                >
+                                                    <Eye className="h-4 w-4 mr-2" />
+                                                    View Submissions
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={(e) => { e.stopPropagation(); confirmDeleteAssignment(assignment); }}
+                                                    title="Delete assignment"
+                                                >
+                                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                                </Button>
+                                            </div>
                                         </div>
 
                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
@@ -292,12 +390,12 @@ export default function AssignmentsPage() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {(assignmentSubmissions[selectedAssignment?.id] || []).map((submission, index) => (
+                                {((assignmentSubmissions && assignmentSubmissions[selectedAssignment?.id]) || []).map((submission, index) => (
                                     <TableRow key={submission.id}>
                                         <TableCell className="font-medium">{index + 1}</TableCell>
                                         <TableCell className="font-medium">{submission.studentName}</TableCell>
                                         <TableCell className="text-sm text-muted-foreground">
-                                            {new Date(submission.submittedAt).toLocaleString()}
+                                            {submission.submittedAt ? new Date(submission.submittedAt).toLocaleString() : '—'}
                                         </TableCell>
                                         <TableCell>
                                             <div className="flex items-center gap-2">
@@ -307,35 +405,20 @@ export default function AssignmentsPage() {
                                         </TableCell>
                                         <TableCell>
                                             {submission.marks ? (
-                                                <Badge className="bg-green-500/10 text-green-500 border-green-500/20">
-                                                    Graded: {submission.marks}/100
-                                                </Badge>
+                                                <Badge className="bg-green-500/10 text-green-500 border-green-500/20">Graded: {submission.marks}/100</Badge>
                                             ) : (
                                                 <Badge variant="outline">Pending Review</Badge>
                                             )}
                                         </TableCell>
                                         <TableCell>
                                             <div className="flex items-center justify-end gap-2">
-                                                <Button
-                                                    size="sm"
-                                                    variant="outline"
-                                                    onClick={() => handlePreview(submission)}
-                                                >
-                                                    <Eye className="h-3 w-3 mr-1" />
-                                                    Preview
+                                                <Button size="sm" variant="outline" onClick={() => handlePreview(submission)}>
+                                                    <Eye className="h-3 w-3 mr-1" /> Preview
                                                 </Button>
-                                                <Button
-                                                    size="sm"
-                                                    variant="outline"
-                                                    onClick={() => handleDownload(submission)}
-                                                >
+                                                <Button size="sm" variant="outline" onClick={() => handleDownload(submission)}>
                                                     <Download className="h-3 w-3" />
                                                 </Button>
-                                                <Button
-                                                    size="sm"
-                                                    variant="default"
-                                                    onClick={() => handleGrade(submission)}
-                                                >
+                                                <Button size="sm" variant="default" onClick={() => handleGrade(submission)}>
                                                     Grade
                                                 </Button>
                                             </div>
@@ -352,33 +435,31 @@ export default function AssignmentsPage() {
             <Dialog open={isPreviewDialogOpen} onOpenChange={(open) => !open && handleClosePreview()}>
                 <DialogContent className="max-w-4xl max-h-[85vh]">
                     <DialogHeader>
-                        <DialogTitle>Assignment Preview</DialogTitle>
-                        <DialogDescription>
-                            {selectedSubmission?.studentName} • {selectedSubmission?.fileName}
-                        </DialogDescription>
+                        <div className="flex items-center justify-between w-full">
+                            <div>
+                                <DialogTitle>Assignment Preview</DialogTitle>
+                                <DialogDescription>
+                                    {selectedSubmission?.studentName} • {selectedSubmission?.fileName}
+                                </DialogDescription>
+                            </div>
+                            <div>
+                                <Button variant="ghost" size="icon" onClick={() => setIsPreviewDialogOpen(false)}>
+                                    <X className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        </div>
                     </DialogHeader>
                     <div className="space-y-4">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm text-muted-foreground">Submitted: {selectedSubmission && new Date(selectedSubmission.submittedAt).toLocaleString()}</p>
+                                <p className="text-sm text-muted-foreground">Submitted: {selectedSubmission && (selectedSubmission.submittedAt ? new Date(selectedSubmission.submittedAt).toLocaleString() : '—')}</p>
                             </div>
                             <div className="flex gap-2">
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleDownload(selectedSubmission)}
-                                >
-                                    <Download className="h-4 w-4 mr-1" />
-                                    Download
+                                <Button variant="outline" size="sm" onClick={() => handleDownload(selectedSubmission)}>
+                                    <Download className="h-4 w-4 mr-1" /> Download
                                 </Button>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handlePlagiarismCheck(selectedSubmission)}
-                                    disabled={isPlagiarismChecking}
-                                >
-                                    <FileCheck className="h-4 w-4 mr-1" />
-                                    {isPlagiarismChecking ? 'Checking...' : 'Check Plagiarism'}
+                                <Button variant="outline" size="sm" onClick={() => handlePlagiarismCheck(selectedSubmission)} disabled={isPlagiarismChecking}>
+                                    <FileCheck className="h-4 w-4 mr-1" /> {isPlagiarismChecking ? 'Checking...' : 'Check Plagiarism'}
                                 </Button>
                             </div>
                         </div>
@@ -392,13 +473,8 @@ export default function AssignmentsPage() {
                                             <FileCheck className="h-4 w-4" />
                                             Plagiarism Report
                                         </div>
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={handleSendPlagiarismReport}
-                                        >
-                                            <Send className="h-3 w-3 mr-1" />
-                                            Send Report
+                                        <Button size="sm" variant="outline" onClick={handleSendPlagiarismReport}>
+                                            <Send className="h-3 w-3 mr-1" /> Send Report
                                         </Button>
                                     </CardTitle>
                                 </CardHeader>
@@ -423,21 +499,9 @@ export default function AssignmentsPage() {
                         )}
 
                         {/* Document Preview */}
-                        <ScrollArea className="h-[400px] border rounded-lg bg-slate-50 dark:bg-slate-950">
-                            <div className="p-6">
-                                <pre className="text-sm whitespace-pre-wrap font-sans">
-                                    {selectedSubmission?.content || `Network Protocol Analysis
-Assignment Submission
-
-Student: ${selectedSubmission?.studentName}
-
-Introduction:
-This analysis covers the fundamental aspects of network protocols including TCP/IP, HTTP, and UDP...
-
-[Document preview would be displayed here]`}
-                                </pre>
-                            </div>
-                        </ScrollArea>
+                        <div className="border rounded-lg bg-slate-50 dark:bg-slate-950 p-3">
+                            {renderSubmissionPreview(selectedSubmission)}
+                        </div>
                     </div>
                 </DialogContent>
             </Dialog>
@@ -454,34 +518,15 @@ This analysis covers the fundamental aspects of network protocols including TCP/
                     <div className="space-y-4">
                         <div className="space-y-2">
                             <Label htmlFor="marks">Marks (out of 100)</Label>
-                            <Input
-                                id="marks"
-                                type="number"
-                                min="0"
-                                max="100"
-                                placeholder="Enter marks"
-                                value={marks}
-                                onChange={(e) => setMarks(e.target.value)}
-                            />
+                            <Input id="marks" type="number" min="0" max="100" placeholder="Enter marks" value={marks} onChange={(e) => setMarks(e.target.value)} />
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="feedback">Feedback (Optional)</Label>
-                            <Textarea
-                                id="feedback"
-                                placeholder="Add feedback for the student..."
-                                rows={4}
-                                value={feedback}
-                                onChange={(e) => setFeedback(e.target.value)}
-                            />
+                            <Textarea id="feedback" placeholder="Add feedback for the student..." rows={4} value={feedback} onChange={(e) => setFeedback(e.target.value)} />
                         </div>
                         <div className="flex items-center justify-between pt-2">
-                            <Button variant="outline" onClick={handleCloseGrading}>
-                                Cancel
-                            </Button>
-                            <Button onClick={handleSubmitGrade}>
-                                <Send className="h-4 w-4 mr-2" />
-                                Send Marks
-                            </Button>
+                            <Button variant="outline" onClick={handleCloseGrading}>Cancel</Button>
+                            <Button onClick={handleSubmitGrade}><Send className="h-4 w-4 mr-2" /> Send Marks</Button>
                         </div>
                     </div>
                 </DialogContent>
@@ -522,6 +567,22 @@ This analysis covers the fundamental aspects of network protocols including TCP/
                     </form>
                 </DialogContent>
             </Dialog>
+
+            {/* Delete confirmation dialog */}
+            <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Assignment</AlertDialogTitle>
+                        <AlertDialogDescription>Are you sure you want to delete "{assignmentToDelete?.title}"? This action cannot be undone.</AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => setDeleteDialogOpen(false)}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDeleteAssignment} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                            Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { getLocalData, setLocalData } from '@/utils/storage';
+import { getLocalData, setLocalData, getUser } from '@/utils/storage';
 import { FileText, Upload, CheckCircle2, Clock, Eye, Download as DownloadIcon, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
@@ -17,6 +17,7 @@ export default function AssignmentsPage() {
     const [selectedAssignment, setSelectedAssignment] = useState(null);
     const [file, setFile] = useState(null);
     const [previewAssignment, setPreviewAssignment] = useState(null);
+    const user = getUser();
 
     const pendingAssignments = assignments.filter(a => a.status === 'pending');
     const submittedAssignments = assignments.filter(a => a.status === 'submitted');
@@ -42,9 +43,9 @@ export default function AssignmentsPage() {
 
             const updatedAssignments = assignments.map(a =>
                 a.id === selectedAssignment.id
-                    ? { 
-                        ...a, 
-                        status: 'submitted', 
+                    ? {
+                        ...a,
+                        status: 'submitted',
                         submittedAt: new Date().toISOString().split('T')[0],
                         submittedFile: fileData
                     }
@@ -53,6 +54,29 @@ export default function AssignmentsPage() {
 
             setAssignments(updatedAssignments);
             setLocalData('assignments', updatedAssignments);
+
+            // --- NEW: record submission in assignmentSubmissions so faculty can see it ---
+            try {
+                const subs = getLocalData('assignmentSubmissions', {});
+                const submissionRecord = {
+                    id: Date.now(),
+                    studentId: user?.id || null,
+                    studentName: user?.fullName || 'Anonymous Student',
+                    submittedAt: new Date().toISOString(),
+                    fileName: fileData.name,
+                    fileSize: fileData.size,
+                    fileType: fileData.type,
+                    fileData: fileData.data,
+                };
+                subs[selectedAssignment.id] = subs[selectedAssignment.id] || [];
+                subs[selectedAssignment.id].push(submissionRecord);
+                setLocalData('assignmentSubmissions', subs);
+                // also trigger storage event for other tabs (best-effort)
+                window.localStorage.setItem('assignmentSubmissions_lastUpdate', String(Date.now()));
+            } catch (err) {
+                console.warn('Could not save assignment submission to shared storage', err);
+            }
+            // --- END NEW ---
 
             toast.success('Assignment submitted successfully!');
             setUploadDialogOpen(false);
@@ -178,7 +202,7 @@ export default function AssignmentsPage() {
                                     </CardHeader>
                                     <CardContent>
                                         <p className="text-sm text-muted-foreground">{assignment.description}</p>
-                                        
+
                                         {assignment.submittedFile && (
                                             <div className="mt-4 p-3 bg-muted rounded-lg border border-border">
                                                 <div className="flex items-center justify-between">
@@ -215,7 +239,7 @@ export default function AssignmentsPage() {
                                                 </div>
                                             </div>
                                         )}
-                                        
+
                                         <div className="mt-4 flex items-center justify-between text-sm">
                                             <span className="text-muted-foreground">
                                                 Submitted on: {new Date(assignment.submittedAt).toLocaleDateString()}
@@ -312,13 +336,13 @@ export default function AssignmentsPage() {
                         </DialogHeader>
                         <div className="mt-4 max-h-[60vh] overflow-auto">
                             {previewAssignment.submittedFile.type?.startsWith('image/') ? (
-                                <img 
-                                    src={previewAssignment.submittedFile.data} 
+                                <img
+                                    src={previewAssignment.submittedFile.data}
                                     alt={previewAssignment.submittedFile.name}
                                     className="w-full rounded-lg"
                                 />
                             ) : previewAssignment.submittedFile.type === 'application/pdf' ? (
-                                <iframe 
+                                <iframe
                                     src={previewAssignment.submittedFile.data}
                                     className="w-full h-[60vh] rounded-lg border"
                                     title={previewAssignment.submittedFile.name}
