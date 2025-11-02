@@ -45,6 +45,24 @@ const submissionSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
         default: null
+    },
+    plagiarismReportUrl: {
+        type: String,
+        default: null
+    },
+    plagiarismReport: {
+        similarity: {
+            type: Number,
+            default: null
+        },
+        sources: [{
+            name: String,
+            similarity: Number
+        }],
+        reportedAt: {
+            type: Date,
+            default: null
+        }
     }
 }, {
     timestamps: true

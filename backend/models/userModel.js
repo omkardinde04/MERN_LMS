@@ -33,7 +33,7 @@ const userSchema = new mongoose.Schema({
     },
     avatar: {
         type: String,
-        default: function() {
+        default: function () {
             return `https://api.dicebear.com/7.x/avataaars/svg?seed=${this.fullName}`;
         }
     },
@@ -75,9 +75,9 @@ const userSchema = new mongoose.Schema({
     timestamps: true
 });
 
-// Index for faster queries
-userSchema.index({ email: 1 });
-userSchema.index({ studentId: 1 });
-userSchema.index({ role: 1 });
+// Remove duplicate index definitions (unique: true already creates indexes)
+// userSchema.index({ email: 1 });
+// userSchema.index({ studentId: 1 });
+// userSchema.index({ role: 1 });
 
 export default mongoose.model('User', userSchema);

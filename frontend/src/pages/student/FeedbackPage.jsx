@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -7,14 +7,16 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { getLocalData, setLocalData } from '@/utils/storage';
+import { getLocalData } from '@/utils/storage';
+import { studentAPI } from '@/utils/api';
 import { MessageSquare, Trash2, Star, Upload, FileText, X, Eye, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 
 export default function FeedbackPage() {
     const courses = getLocalData('courses', []);
-    const [feedbackList, setFeedbackList] = useState(getLocalData('feedback', []));
+    const [feedbackList, setFeedbackList] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [selectedCourse, setSelectedCourse] = useState('');
     const [rating, setRating] = useState('');
     const [comment, setComment] = useState('');
@@ -25,6 +27,25 @@ export default function FeedbackPage() {
     const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
     const [previewData, setPreviewData] = useState(null);
     const fileInputRef = useRef(null);
+
+    // Load feedback from backend
+    useEffect(() => {
+        const loadFeedback = async () => {
+            try {
+                setLoading(true);
+                const response = await studentAPI.getFeedback();
+                if (response.success) {
+                    setFeedbackList(response.data || []);
+                }
+            } catch (error) {
+                console.error('Error loading feedback:', error);
+                toast.error('Failed to load feedback');
+            } finally {
+                setLoading(false);
+            }
+        };
+        loadFeedback();
+    }, []);
 
     const handleFileChange = (e) => {
         const file = e.target.files[0];
@@ -56,7 +77,7 @@ export default function FeedbackPage() {
         }
     };
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
 
         if (!selectedCourse || !rating || !comment) {
@@ -64,42 +85,62 @@ export default function FeedbackPage() {
             return;
         }
 
-        const course = courses.find(c => c.id === selectedCourse);
-        const newFeedback = {
-            id: Date.now(),
-            courseId: selectedCourse,
-            courseName: course.name,
-            rating: parseInt(rating),
-            comment,
-            fileName: selectedFile ? fileName : null,
-            fileSize: selectedFile ? (selectedFile.file.size / 1024).toFixed(2) + ' KB' : null,
-            filePreview: selectedFile ? selectedFile.preview : null,
-            fileType: selectedFile ? selectedFile.type : null,
-            date: new Date().toISOString().split('T')[0],
-        };
+        try {
+            const course = courses.find(c => c.id === selectedCourse);
+            const feedbackData = {
+                courseId: selectedCourse,
+                rating: parseInt(rating),
+                comment,
+                attachment: selectedFile ? {
+                    fileName: fileName,
+                    fileData: selectedFile.preview,
+                    fileType: selectedFile.type
+                } : null
+            };
 
-        const updated = [...feedbackList, newFeedback];
-        setFeedbackList(updated);
-        setLocalData('feedback', updated);
+            const response = await studentAPI.createFeedback(feedbackData);
 
-        setSelectedCourse('');
-        setRating('');
-        setComment('');
-        setSelectedFile(null);
-        setFileName('');
-        if (fileInputRef.current) {
-            fileInputRef.current.value = '';
+            if (response.success) {
+                // Reload feedback list
+                const reloadResponse = await studentAPI.getFeedback();
+                if (reloadResponse.success) {
+                    setFeedbackList(reloadResponse.data || []);
+                }
+
+                setSelectedCourse('');
+                setRating('');
+                setComment('');
+                setSelectedFile(null);
+                setFileName('');
+                if (fileInputRef.current) {
+                    fileInputRef.current.value = '';
+                }
+                toast.success(response.message || 'Feedback submitted successfully!');
+            }
+        } catch (error) {
+            console.error('Feedback submit error:', error);
+            toast.error(error.message || 'Failed to submit feedback');
         }
-        toast.success('Feedback submitted successfully!');
     };
 
-    const handleDelete = (id) => {
-        const updated = feedbackList.filter(f => f.id !== id);
-        setFeedbackList(updated);
-        setLocalData('feedback', updated);
-        toast.success('Feedback deleted');
-        setDeleteDialogOpen(false);
-        setFeedbackToDelete(null);
+    const handleDelete = async (id) => {
+        try {
+            const response = await studentAPI.deleteFeedback(id);
+
+            if (response.success) {
+                // Reload feedback list
+                const reloadResponse = await studentAPI.getFeedback();
+                if (reloadResponse.success) {
+                    setFeedbackList(reloadResponse.data || []);
+                }
+                toast.success(response.message || 'Feedback deleted');
+                setDeleteDialogOpen(false);
+                setFeedbackToDelete(null);
+            }
+        } catch (error) {
+            console.error('Feedback delete error:', error);
+            toast.error(error.message || 'Failed to delete feedback');
+        }
     };
 
     const openDeleteDialog = (feedback) => {

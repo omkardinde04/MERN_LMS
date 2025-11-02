@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { Toaster } from 'sonner';
-import { initializeMockData } from './utils/mockData';
+// Mock data imports removed - using live API
 
 // Pages
 import Login from './pages/Login';
@@ -36,9 +36,7 @@ import FacultyCodeSubmissions from './pages/faculty/CodeSubmissionsPage';
 import FacultyCreateAssignment from './pages/faculty/CreateAssignmentPage';
 
 function App() {
-  useEffect(() => {
-    initializeMockData();
-  }, []);
+  // Mock data initialization removed - using live API
 
   return (
     <ThemeProvider>

@@ -6,85 +6,115 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { getLocalData, setLocalData, getUser } from '@/utils/storage';
-import { FileText, Upload, CheckCircle2, Clock, Eye, Download as DownloadIcon, X } from 'lucide-react';
+import { getUser } from '@/utils/storage';
+import { studentAPI } from '@/utils/api';
+import { getSocket } from '@/utils/socket';
+import { FileText, Upload, CheckCircle2, Clock, Eye, Download as DownloadIcon, X, FileCheck, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 
 export default function AssignmentsPage() {
-    const [assignments, setAssignments] = useState(getLocalData('assignments', []));
+    const [assignments, setAssignments] = useState({ pending: [], submitted: [] });
     const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
     const [selectedAssignment, setSelectedAssignment] = useState(null);
     const [file, setFile] = useState(null);
     const [previewAssignment, setPreviewAssignment] = useState(null);
+    const [loading, setLoading] = useState(true);
     const user = getUser();
 
-    const pendingAssignments = assignments.filter(a => a.status === 'pending');
-    const submittedAssignments = assignments.filter(a => a.status === 'submitted');
+    // Load assignments from backend
+    const loadAssignments = async () => {
+        try {
+            setLoading(true);
+            const response = await studentAPI.getAssignments();
+            if (response.success) {
+                setAssignments({
+                    pending: response.data.pending || [],
+                    submitted: response.data.submitted || []
+                });
+            }
+        } catch (error) {
+            console.error('Error loading assignments:', error);
+            toast.error('Failed to load assignments');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        loadAssignments();
+
+        // Setup Socket.io for real-time updates
+        try {
+            const socket = getSocket(user?.token);
+
+            // Join student room
+            if (socket && user?.id) {
+                socket.emit('join-student-room', user.id);
+            }
+
+            // Listen for assignment graded event
+            const handleAssignmentGraded = (data) => {
+                console.log('Assignment graded event received:', data);
+                toast.success('Your assignment has been graded!');
+
+                // Reload assignments to show updated grades
+                loadAssignments();
+            };
+
+            if (socket) {
+                socket.on('assignment-graded', handleAssignmentGraded);
+            }
+
+            return () => {
+                if (socket) {
+                    socket.off('assignment-graded', handleAssignmentGraded);
+                }
+            };
+        } catch (error) {
+            console.error('Socket.io error:', error);
+            // Continue without socket - not critical for basic functionality
+        }
+    }, [user]);
 
     const handleFileChange = (e) => {
         setFile(e.target.files[0]);
     };
 
-    const handleSubmit = () => {
+    const handleSubmit = async () => {
         if (!selectedAssignment || !file) {
             toast.error('Please select an assignment and upload a file');
             return;
         }
 
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            const fileData = {
-                name: file.name,
-                size: file.size,
-                type: file.type,
-                data: reader.result, // Base64 or data URL
-            };
+        try {
+            // Convert file to base64 or upload to server first
+            const reader = new FileReader();
+            reader.onloadend = async () => {
+                try {
+                    // For now, use data URL. In production, upload to S3/cloud storage
+                    const fileData = reader.result;
+                    const response = await studentAPI.submitAssignment(
+                        selectedAssignment.id,
+                        fileData,
+                        file.name
+                    );
 
-            const updatedAssignments = assignments.map(a =>
-                a.id === selectedAssignment.id
-                    ? {
-                        ...a,
-                        status: 'submitted',
-                        submittedAt: new Date().toISOString().split('T')[0],
-                        submittedFile: fileData
+                    if (response.success) {
+                        toast.success('Assignment submitted successfully!');
+                        setUploadDialogOpen(false);
+                        setSelectedAssignment(null);
+                        setFile(null);
+                        loadAssignments(); // Reload to show updated status
                     }
-                    : a
-            );
-
-            setAssignments(updatedAssignments);
-            setLocalData('assignments', updatedAssignments);
-
-            // --- NEW: record submission in assignmentSubmissions so faculty can see it ---
-            try {
-                const subs = getLocalData('assignmentSubmissions', {});
-                const submissionRecord = {
-                    id: Date.now(),
-                    studentId: user?.id || null,
-                    studentName: user?.fullName || 'Anonymous Student',
-                    submittedAt: new Date().toISOString(),
-                    fileName: fileData.name,
-                    fileSize: fileData.size,
-                    fileType: fileData.type,
-                    fileData: fileData.data,
-                };
-                subs[selectedAssignment.id] = subs[selectedAssignment.id] || [];
-                subs[selectedAssignment.id].push(submissionRecord);
-                setLocalData('assignmentSubmissions', subs);
-                // also trigger storage event for other tabs (best-effort)
-                window.localStorage.setItem('assignmentSubmissions_lastUpdate', String(Date.now()));
-            } catch (err) {
-                console.warn('Could not save assignment submission to shared storage', err);
-            }
-            // --- END NEW ---
-
-            toast.success('Assignment submitted successfully!');
-            setUploadDialogOpen(false);
-            setSelectedAssignment(null);
-            setFile(null);
-        };
-        reader.readAsDataURL(file);
-
+                } catch (error) {
+                    toast.error(error.message || 'Failed to submit assignment');
+                }
+            };
+            reader.readAsDataURL(file);
+        } catch (error) {
+            toast.error('Failed to submit assignment');
+        }
     };
 
     const openUploadDialog = (assignment = null) => {
@@ -92,69 +122,22 @@ export default function AssignmentsPage() {
         setUploadDialogOpen(true);
     };
 
-    // Add this useEffect after state declarations to sync submissions into student assignments
-    useEffect(() => {
-        const syncFromSubmissions = () => {
-            try {
-                const subs = getLocalData('assignmentSubmissions', {});
-                const myUpdatedAssignments = getLocalData('assignments', []).map(a => ({ ...a }));
 
-                Object.keys(subs).forEach(assignmentId => {
-                    const arr = subs[assignmentId] || [];
-                    const mySub = arr.find(s => String(s.studentId) === String(user?.id));
-                    if (mySub) {
-                        const idx = myUpdatedAssignments.findIndex(it => String(it.id) === String(assignmentId));
-                        if (idx !== -1) {
-                            myUpdatedAssignments[idx] = {
-                                ...myUpdatedAssignments[idx],
-                                status: mySub.marks ? 'graded' : (myUpdatedAssignments[idx].status || 'submitted'),
-                                score: mySub.marks ?? myUpdatedAssignments[idx].score,
-                                feedback: mySub.feedback ?? myUpdatedAssignments[idx].feedback,
-                                plagiarismReport: mySub.plagiarismReport ?? myUpdatedAssignments[idx].plagiarismReport,
-                                plagiarismReportedAt: mySub.plagiarismReportedAt ?? myUpdatedAssignments[idx].plagiarismReportedAt
-                            };
-                        }
-                    }
-                });
-
-                // persist and update component state
-                setLocalData('assignments', myUpdatedAssignments);
-                setAssignments(myUpdatedAssignments);
-            } catch (err) {
-                console.warn('syncFromSubmissions failed', err);
-            }
-        };
-
-        // initial sync
-        syncFromSubmissions();
-
-        // listen cross-tab
-        const onStorage = (e) => {
-            if (!e.key) return;
-            if (e.key === 'assignmentSubmissions_lastUpdate' || e.key === 'assignmentSubmissions') {
-                syncFromSubmissions();
-            }
-        };
-
-        // custom same-tab event
-        const onLocalDataChanged = (e) => {
-            const key = e?.detail?.key;
-            if (!key) return;
-            if (key === 'assignmentSubmissions') syncFromSubmissions();
-        };
-
-        window.addEventListener('storage', onStorage);
-        window.addEventListener('local-data-changed', onLocalDataChanged);
-
-        // poll fallback
-        const interval = setInterval(syncFromSubmissions, 2000);
-
-        return () => {
-            clearInterval(interval);
-            window.removeEventListener('storage', onStorage);
-            window.removeEventListener('local-data-changed', onLocalDataChanged);
-        };
-    }, [user]);
+    if (loading) {
+        return (
+            <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h1 className="text-3xl font-bold">Assignments</h1>
+                        <p className="text-muted-foreground mt-1">Loading assignments...</p>
+                    </div>
+                </div>
+                <div className="flex items-center justify-center py-12">
+                    <Loader2 className="h-8 w-8 text-muted-foreground animate-spin" />
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">
@@ -173,17 +156,17 @@ export default function AssignmentsPage() {
                 <TabsList className="grid w-full grid-cols-2 max-w-md">
                     <TabsTrigger value="pending">
                         <Clock className="h-4 w-4 mr-2" />
-                        Pending ({pendingAssignments.length})
+                        Pending ({assignments.pending.length})
                     </TabsTrigger>
                     <TabsTrigger value="submitted">
                         <CheckCircle2 className="h-4 w-4 mr-2" />
-                        Submitted ({submittedAssignments.length})
+                        Submitted ({assignments.submitted.length})
                     </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="pending" className="space-y-4">
-                    {pendingAssignments.length > 0 ? (
-                        pendingAssignments.map((assignment, index) => (
+                    {assignments.pending.length > 0 ? (
+                        assignments.pending.map((assignment, index) => (
                             <motion.div
                                 key={assignment.id}
                                 initial={{ opacity: 0, y: 20 }}
@@ -231,8 +214,8 @@ export default function AssignmentsPage() {
                 </TabsContent>
 
                 <TabsContent value="submitted" className="space-y-4">
-                    {submittedAssignments.length > 0 ? (
-                        submittedAssignments.map((assignment, index) => (
+                    {assignments.submitted.length > 0 ? (
+                        assignments.submitted.map((assignment, index) => (
                             <motion.div
                                 key={assignment.id}
                                 initial={{ opacity: 0, y: 20 }}
@@ -304,6 +287,51 @@ export default function AssignmentsPage() {
                                             </div>
                                         )}
 
+                                        {/* Feedback Section */}
+                                        {assignment.feedback && (
+                                            <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                                                <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 mb-1">Feedback:</p>
+                                                <p className="text-sm text-blue-900 dark:text-blue-200">{assignment.feedback}</p>
+                                            </div>
+                                        )}
+
+                                        {/* Plagiarism Report Section */}
+                                        {assignment.plagiarismReport && (
+                                            <div className="mt-4 p-3 bg-orange-50 dark:bg-orange-950/20 rounded-lg border border-orange-200 dark:border-orange-800">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <div className="flex items-center gap-2">
+                                                        <FileCheck className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                                                        <p className="text-xs font-semibold text-orange-700 dark:text-orange-300">Plagiarism Report:</p>
+                                                    </div>
+                                                    <span className={`text-xs font-medium px-2 py-1 rounded ${assignment.plagiarismReport.similarity > 25 ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300' : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'}`}>
+                                                        Similarity: {assignment.plagiarismReport.similarity}%
+                                                    </span>
+                                                </div>
+                                                {assignment.plagiarismReport.sources && assignment.plagiarismReport.sources.length > 0 && (
+                                                    <div className="mt-2 space-y-1">
+                                                        <p className="text-xs font-medium text-orange-700 dark:text-orange-300">Sources Found:</p>
+                                                        {assignment.plagiarismReport.sources.map((source, idx) => (
+                                                            <div key={idx} className="flex justify-between text-xs text-orange-900 dark:text-orange-200">
+                                                                <span>{source.name}</span>
+                                                                <span>{source.similarity}%</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                                {assignment.plagiarismReportUrl && (
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        className="mt-2 w-full"
+                                                        onClick={() => window.open(assignment.plagiarismReportUrl, '_blank')}
+                                                    >
+                                                        <FileCheck className="h-3 w-3 mr-1" />
+                                                        View Full Report
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        )}
+
                                         <div className="mt-4 flex items-center justify-between text-sm">
                                             <span className="text-muted-foreground">
                                                 Submitted on: {new Date(assignment.submittedAt).toLocaleDateString()}
@@ -341,15 +369,15 @@ export default function AssignmentsPage() {
                             <div className="space-y-2">
                                 <Label>Select Assignment</Label>
                                 <Select onValueChange={(value) => {
-                                    const assignment = pendingAssignments.find(a => a.id === parseInt(value));
+                                    const assignment = assignments.pending.find(a => String(a.id) === String(value));
                                     setSelectedAssignment(assignment);
                                 }}>
                                     <SelectTrigger>
                                         <SelectValue placeholder="Choose an assignment" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {pendingAssignments.map(assignment => (
-                                            <SelectItem key={assignment.id} value={assignment.id.toString()}>
+                                        {assignments.pending.map(assignment => (
+                                            <SelectItem key={assignment.id} value={String(assignment.id)}>
                                                 {assignment.title} - {assignment.courseName}
                                             </SelectItem>
                                         ))}

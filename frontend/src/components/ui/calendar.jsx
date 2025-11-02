@@ -21,9 +21,9 @@ function UiCalendar({ className, classNames, showOutsideDays = true, ...props })
         nav_button_previous: 'absolute left-1',
         nav_button_next: 'absolute right-2',
         table: 'w-full border-collapse space-y-1',
-        head_row: 'flex justify-around',
+        head_row: 'justify-around',
         head_cell: 'text-muted-foreground rounded-md w-9 font-normal text-[0.8rem] text-center',
-        row: 'flex w-full mt-2 justify-around',
+        row: 'w-full mt-2 justify-around',
         cell: 'h-9 w-9 text-center text-sm p-0 relative flex items-center justify-center',
         day: cn(
           buttonVariants({ variant: 'ghost' }),

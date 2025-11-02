@@ -5,6 +5,7 @@ import Feedback from '../models/feedbackModel.js';
 import Announcement from '../models/announcementModel.js';
 import Timetable from '../models/timetableModel.js';
 import Quiz from '../models/quizModel.js';
+import User from '../models/userModel.js';
 
 // @desc    Get student dashboard data
 // @route   GET /api/student/dashboard
@@ -88,8 +89,8 @@ export const getCourses = async (req, res) => {
                     status: { $in: ['submitted', 'graded'] }
                 });
 
-                const progress = totalAssignments > 0 
-                    ? Math.round((completedAssignments / totalAssignments) * 100) 
+                const progress = totalAssignments > 0
+                    ? Math.round((completedAssignments / totalAssignments) * 100)
                     : 0;
 
                 return {
@@ -117,6 +118,73 @@ export const getCourses = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Error fetching courses',
+            error: error.message
+        });
+    }
+};
+
+// @desc    Enroll in a course using enrollment code
+// @route   POST /api/student/courses/enroll
+// @access  Private (Student)
+export const enrollInCourse = async (req, res) => {
+    try {
+        const { enrollmentCode } = req.body;
+
+        if (!enrollmentCode) {
+            return res.status(400).json({
+                success: false,
+                message: 'Please provide an enrollment code'
+            });
+        }
+
+        // Find course by enrollment code (stored in description field for now)
+        // In production, create a separate EnrollmentCode model
+        const course = await Course.findOne({
+            code: enrollmentCode.toUpperCase()
+        }).populate('faculty', 'fullName');
+
+        if (!course) {
+            return res.status(404).json({
+                success: false,
+                message: 'Invalid enrollment code'
+            });
+        }
+
+        // Check if student is already enrolled
+        if (course.students.includes(req.user.id)) {
+            return res.status(400).json({
+                success: false,
+                message: 'You are already enrolled in this course'
+            });
+        }
+
+        // Add student to course
+        course.students.push(req.user.id);
+        await course.save();
+
+        // Add course to user's courses
+        const user = await User.findById(req.user.id);
+        if (!user.courses.includes(course._id)) {
+            user.courses.push(course._id);
+            await user.save();
+        }
+
+        res.status(200).json({
+            success: true,
+            message: `Successfully enrolled in ${course.name}`,
+            data: {
+                id: course._id,
+                name: course.name,
+                code: course.code,
+                instructor: course.faculty.fullName
+            }
+        });
+
+    } catch (error) {
+        console.error('Enroll in course error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error enrolling in course',
             error: error.message
         });
     }
@@ -160,7 +228,10 @@ export const getAssignments = async (req, res) => {
                 status: submission ? submission.status : 'pending',
                 submittedAt: submission ? submission.submittedAt : null,
                 score: submission ? submission.score : null,
-                feedback: submission ? submission.feedback : null
+                feedback: submission ? submission.feedback : null,
+                plagiarismReportUrl: submission ? submission.plagiarismReportUrl : null,
+                plagiarismReport: submission ? submission.plagiarismReport : null,
+                gradedAt: submission ? submission.gradedAt : null
             };
         });
 

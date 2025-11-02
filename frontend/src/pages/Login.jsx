@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useTheme } from '@/contexts/ThemeContext';
 import { setUser } from '@/utils/storage';
+import { authAPI } from '@/utils/api';
 import { User, Mail, Hash, Lock, Moon, Sun, BookOpen, FileText, Brain, Code, Calendar, MessageSquare, GraduationCap } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
@@ -13,6 +14,7 @@ import { motion } from 'framer-motion';
 export default function Login() {
     const navigate = useNavigate();
     const { theme, toggleTheme } = useTheme();
+    const [isRegistering, setIsRegistering] = useState(false); // Toggle between login/register
     const [formData, setFormData] = useState({
         fullName: '',
         email: '',
@@ -26,20 +28,23 @@ export default function Login() {
     const validateForm = () => {
         const newErrors = {};
 
-        if (!formData.fullName.trim()) {
-            newErrors.fullName = 'Full name is required';
+        // Only validate Full Name and ID if registering
+        if (isRegistering) {
+            if (!formData.fullName.trim()) {
+                newErrors.fullName = 'Full name is required';
+            }
+
+            if (!formData.id.trim()) {
+                newErrors.id = 'ID is required';
+            } else if (!/^\d{4}$/.test(formData.id)) {
+                newErrors.id = 'ID must be exactly 4 digits';
+            }
         }
 
         if (!formData.email.trim()) {
             newErrors.email = 'Email is required';
         } else if (!formData.email.endsWith('@somaiya.edu')) {
             newErrors.email = 'Email must end with @somaiya.edu';
-        }
-
-        if (!formData.id.trim()) {
-            newErrors.id = 'ID is required';
-        } else if (!/^\d{4}$/.test(formData.id)) {
-            newErrors.id = 'ID must be exactly 4 digits';
         }
 
         if (!formData.password.trim()) {
@@ -52,7 +57,7 @@ export default function Login() {
         return Object.keys(newErrors).length === 0;
     };
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
 
         if (!validateForm()) {
@@ -60,28 +65,31 @@ export default function Login() {
             return;
         }
 
-        // Determine role based on ID (if ends with 0, it's a student)
-        const role = formData.id.endsWith('0') ? 'student' : 'faculty';
+        const { fullName, email, id: studentId, password } = formData;
 
-        // Create user object
-        const user = {
-            fullName: formData.fullName,
-            email: formData.email,
-            id: formData.id,
-            role: role,
-            avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${formData.fullName}`,
-        };
+        try {
+            if (isRegistering) {
+                // Register new user
+                const response = await authAPI.register(fullName, email, studentId, password);
 
-        // Save to localStorage
-        setUser(user);
+                if (response.success) {
+                    setUser({ ...response.user, token: response.token });
+                    toast.success(response.message || 'Welcome to Learnify!');
+                    navigate(response.user.role === 'student' ? '/student' : '/faculty');
+                }
+            } else {
+                // Login existing user (email + password only)
+                const response = await authAPI.login(email, null, password);
 
-        toast.success('Login successful!');
-
-        // Navigate based on role
-        if (role === 'student') {
-            navigate('/student');
-        } else {
-            navigate('/faculty');
+                if (response.success) {
+                    setUser({ ...response.user, token: response.token });
+                    toast.success(response.message || 'Login successful!');
+                    navigate(response.user.role === 'student' ? '/student' : '/faculty');
+                }
+            }
+        } catch (error) {
+            console.error(isRegistering ? 'Registration error:' : 'Login error:', error);
+            toast.error(error.message || `${isRegistering ? 'Registration' : 'Login'} failed. Please try again.`);
         }
     };
 
@@ -117,7 +125,7 @@ export default function Login() {
                     </motion.div>
                 </div>
                 <div className="w-full flex flex-col items-start">
-                    
+
 
                     <motion.h1
                         initial={{ opacity: 0, x: -20 }}
@@ -178,31 +186,41 @@ export default function Login() {
                     >
                         <Card className="border-0 shadow-none bg-transparent px-8 py-6">
                             <CardHeader className="space-y-2 px-0">
-                                <CardTitle className="text-3xl font-bold">Sign In</CardTitle>
+                                <CardTitle className="text-3xl font-bold">
+                                    {isRegistering ? 'Register' : 'Sign In'}
+                                </CardTitle>
                                 <CardDescription className="text-base text-muted-foreground">
-                                    Enter your credentials to access your dashboard
+                                    {isRegistering
+                                        ? 'Create a new account'
+                                        : 'Enter your email and password to login'
+                                    }
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="px-0">
                                 <form onSubmit={handleSubmit} className="space-y-4">
-                                    <div className="space-y-2">
-                                        <Label htmlFor="fullName">Full Name</Label>
-                                        <div className="relative">
-                                            <User className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground z-10" />
-                                            <Input
-                                                id="fullName"
-                                                name="fullName"
-                                                type="text"
-                                                placeholder="Enter your full name"
-                                                className="pl-10 w-full"
-                                                value={formData.fullName}
-                                                onChange={handleChange}
-                                            />
-                                        </div>
-                                        {errors.fullName && (
-                                            <p className="text-sm text-destructive">{errors.fullName}</p>
-                                        )}
-                                    </div>
+                                    {/* Show Full Name and ID only when registering */}
+                                    {isRegistering && (
+                                        <>
+                                            <div className="space-y-2">
+                                                <Label htmlFor="fullName">Full Name</Label>
+                                                <div className="relative">
+                                                    <User className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground z-10" />
+                                                    <Input
+                                                        id="fullName"
+                                                        name="fullName"
+                                                        type="text"
+                                                        placeholder="Enter your full name"
+                                                        className="pl-10 w-full"
+                                                        value={formData.fullName}
+                                                        onChange={handleChange}
+                                                    />
+                                                </div>
+                                                {errors.fullName && (
+                                                    <p className="text-sm text-destructive">{errors.fullName}</p>
+                                                )}
+                                            </div>
+                                        </>
+                                    )}
 
                                     <div className="space-y-2">
                                         <Label htmlFor="email">Email</Label>
@@ -223,25 +241,27 @@ export default function Login() {
                                         )}
                                     </div>
 
-                                    <div className="space-y-2">
-                                        <Label htmlFor="id">4-Digit ID</Label>
-                                        <div className="relative">
-                                            <Hash className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground z-10" />
-                                            <Input
-                                                id="id"
-                                                name="id"
-                                                type="text"
-                                                placeholder="Enter 4-digit ID"
-                                                className="pl-10 w-full"
-                                                value={formData.id}
-                                                onChange={handleChange}
-                                                maxLength={4}
-                                            />
+                                    {isRegistering && (
+                                        <div className="space-y-2">
+                                            <Label htmlFor="id">4-Digit ID</Label>
+                                            <div className="relative">
+                                                <Hash className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground z-10" />
+                                                <Input
+                                                    id="id"
+                                                    name="id"
+                                                    type="text"
+                                                    placeholder="Enter 4-digit ID"
+                                                    className="pl-10 w-full"
+                                                    value={formData.id}
+                                                    onChange={handleChange}
+                                                    maxLength={4}
+                                                />
+                                            </div>
+                                            {errors.id && (
+                                                <p className="text-sm text-destructive">{errors.id}</p>
+                                            )}
                                         </div>
-                                        {errors.id && (
-                                            <p className="text-sm text-destructive">{errors.id}</p>
-                                        )}
-                                    </div>
+                                    )}
 
                                     <div className="space-y-2">
                                         <div className="flex items-center justify-between">
@@ -270,26 +290,22 @@ export default function Login() {
                                         )}
                                     </div>
 
-                                    <div className="flex items-center space-x-2">
-                                        <input
-                                            type="checkbox"
-                                            id="rememberMe"
-                                            name="rememberMe"
-                                            checked={formData.rememberMe}
-                                            onChange={handleChange}
-                                            className="h-4 w-4 rounded border-2 border-input text-primary focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                                        />
-                                        <Label htmlFor="rememberMe" className="text-sm font-medium text-foreground">
-                                            Remember me
-                                        </Label>
-                                    </div>
-
-                                    <Button
-                                        type="submit"
-                                        className="w-full h-12 text-base font-semibold"
-                                    >
-                                        Sign In
+                                    <Button type="submit" className="w-full h-12 text-base font-semibold">
+                                        {isRegistering ? 'Register' : 'Sign In'}
                                     </Button>
+
+                                    <div className="text-center mt-4">
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsRegistering(!isRegistering)}
+                                            className="text-sm text-primary hover:underline"
+                                        >
+                                            {isRegistering
+                                                ? 'Already have an account? Sign In'
+                                                : 'Need an account? Register'
+                                            }
+                                        </button>
+                                    </div>
                                 </form>
                             </CardContent>
                         </Card>

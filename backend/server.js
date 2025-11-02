@@ -1,6 +1,8 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
 import connectDB from './config/db.js';
 
 // Import routes
@@ -83,10 +85,10 @@ app.use((req, res) => {
 // Global error handler
 app.use((err, req, res, next) => {
     console.error('Error:', err);
-    
+
     const statusCode = err.statusCode || 500;
     const message = err.message || 'Internal Server Error';
-    
+
     res.status(statusCode).json({
         success: false,
         message,
@@ -94,23 +96,64 @@ app.use((err, req, res, next) => {
     });
 });
 
-// Start server
+// Create HTTP server and Socket.io instance
 const PORT = process.env.PORT || 5000;
+const httpServer = createServer(app);
 
-const server = app.listen(PORT, () => {
+const io = new Server(httpServer, {
+    cors: {
+        origin: process.env.CLIENT_URL || 'http://localhost:5173',
+        methods: ['GET', 'POST'],
+        credentials: true
+    }
+});
+
+// Socket.io connection handling
+io.on('connection', (socket) => {
+    console.log(`✅ Client connected: ${socket.id}`);
+
+    // Join student room for real-time updates
+    socket.on('join-student-room', (studentId) => {
+        socket.join(`student-${studentId}`);
+        console.log(`👤 Student ${studentId} joined their room`);
+    });
+
+    // Join faculty room for real-time updates
+    socket.on('join-faculty-room', (facultyId) => {
+        socket.join(`faculty-${facultyId}`);
+        console.log(`👨‍🏫 Faculty ${facultyId} joined their room`);
+    });
+
+    // Join code submissions room (all faculty can see)
+    socket.on('join-code-submissions-room', () => {
+        socket.join('code-submissions');
+        console.log(`📝 Client joined code submissions room`);
+    });
+
+    socket.on('disconnect', () => {
+        console.log(`❌ Client disconnected: ${socket.id}`);
+    });
+});
+
+// Make io available to other modules
+app.set('io', io);
+
+// Start server
+httpServer.listen(PORT, () => {
     console.log('='.repeat(50));
     console.log(`🚀 Learnify API Server`);
     console.log(`📡 Server running on port ${PORT}`);
     console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`🔗 API URL: http://localhost:${PORT}`);
     console.log(`🔗 Client URL: ${process.env.CLIENT_URL || 'http://localhost:5173'}`);
+    console.log(`🔌 Socket.io enabled for real-time updates`);
     console.log('='.repeat(50));
 });
 
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (err) => {
     console.error('❌ Unhandled Rejection:', err);
-    server.close(() => {
+    httpServer.close(() => {
         process.exit(1);
     });
 });
@@ -118,9 +161,9 @@ process.on('unhandledRejection', (err) => {
 // Handle SIGTERM
 process.on('SIGTERM', () => {
     console.log('👋 SIGTERM received, shutting down gracefully');
-    server.close(() => {
+    httpServer.close(() => {
         console.log('✅ Process terminated');
     });
 });
 
-export default app;
+export { app, io };

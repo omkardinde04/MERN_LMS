@@ -4,15 +4,19 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
 import { codeStarters } from '@/utils/mockData';
-import { Play, Send, Loader2, Code2, Download, Settings, Star, MessageSquare } from 'lucide-react';
+import { getUser } from '@/utils/storage';
+import { studentAPI } from '@/utils/api';
+import { Play, Send, Loader2, Code2, Download, Settings, Star, MessageSquare, FileCode, Calendar, Eye, Trash2, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 
 // --- API Configurations ---
+// NOTE: All API calls now go through backend proxy for security
 
-// Piston API
-const PISTON_API_URL = "https://emkc.org/api/v2/piston/execute";
 const languageMap = {
     'python': { name: 'python', version: '3.10.0', extension: 'py', displayName: 'Python' },
     'java': { name: 'java', version: '15.0.2', extension: 'java', displayName: 'Java' },
@@ -20,21 +24,10 @@ const languageMap = {
     'c': { name: 'c', version: '10.2.0', extension: 'c', displayName: 'C' }
 };
 
-// Gemini API
-// --- THIS IS THE FIX ---
-// The model "gemini-1.5-flash" is not found. We are changing to the standard "gemini-pro" model.
-// I have also changed "v1" to "v1beta" as "gemini-pro" works on the "v1beta" endpoint.
-const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=";
-;
-// ----------------------
-
-// --- IMPORTANT: ADD YOUR GEMINI API KEY HERE ---
-const API_KEY = "AIzaSyAy5fkupI-8Wal6OC1TMDcjuLhCZAw0qWA"; // This is the key you provided.
-
 // --- Helper Functions ---
 
 /**
- * Calls the Piston API to execute code.
+ * Calls the backend proxy to execute code (Piston API through backend).
  */
 const executeCodeWithAPI = async (lang, codeText, stdin) => {
     try {
@@ -43,105 +36,37 @@ const executeCodeWithAPI = async (lang, codeText, stdin) => {
             throw new Error('Language not supported for API execution');
         }
 
-        const response = await fetch(PISTON_API_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                language: langConfig.name,
-                version: langConfig.version,
-                files: [{ content: codeText }],
-                stdin: stdin || ''
-            })
+        // Use backend proxy via studentAPI
+        const response = await studentAPI.executeCode({
+            language: langConfig.name,
+            code: codeText,
+            stdin: stdin || ''
         });
 
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.message || 'API request failed');
+        if (response.success && response.data) {
+            return {
+                success: response.data.executionSuccess || false,
+                output: response.data.output || '[No output]',
+                language: lang
+            };
+        } else {
+            throw new Error(response.message || 'Execution failed');
         }
-
-        const result = await response.json();
-        if (!result.run) {
-            throw new Error("API response was successful but did not contain a 'run' object.");
-        }
-
-        // Combine stdout and stderr for a complete output
-        let fullOutput = "";
-        let success = true;
-
-        if (result.run.stdout) {
-            fullOutput += result.run.stdout;
-        }
-        if (result.run.stderr) {
-            fullOutput += (fullOutput ? "\n" : "") + `[ERROR]\n${result.run.stderr}`;
-            success = false;
-        }
-
-        fullOutput += `\n\n---
-Program exited with code ${result.run.code}
-Signal: ${result.run.signal || 'None'}`;
-
-        return {
-            success: success,
-            output: fullOutput || 'Execution finished with no output.',
-        };
 
     } catch (error) {
-        console.error('API execution error:', error);
+        console.error('Code execution error:', error);
         return {
             success: false,
-            output: `[EXECUTION FAILED]\n${error.message}`
+            output: `[EXECUTION FAILED]\n${error.message || 'Unknown error occurred'}`,
+            language: lang
         };
     }
 };
 
-/**
- * Calls the Gemini API to get code feedback.
- */
+// AI feedback is now handled by backend - this function is kept for fallback only
 async function getCodeFeedback(codeContent, language) {
-    if (!API_KEY) {
-        // Return mock feedback when API key is missing
-        return generateMockFeedback(codeContent, language);
-    }
-    if (codeContent.trim().length < 10) {
-        return "Code is too short for meaningful feedback.";
-    }
-
-    const userQuery = `You are a code review assistant providing constructive feedback. Analyze the following ${language} code for quality, style, potential bugs, and suggest improvements. Be concise (3-5 bullet points). Do not comment on correctness unless there's an obvious bug. Focus on readability, conventions, and potential optimizations.\n\nCode:\n\`\`\`${language}\n${codeContent}\n\`\`\``;
-
-    const payload = {
-        contents: [{ parts: [{ text: userQuery }] }],
-        generationConfig: {
-            maxOutputTokens: 300,
-            temperature: 0.5,
-        }
-    };
-
-    try {
-        const apiUrl = `${GEMINI_API_URL}${API_KEY}`;
-        const response = await fetch(apiUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) {
-            const errorBody = await response.json();
-            if (errorBody?.error?.message.includes("API key not valid")) {
-                throw new Error("Gemini API key not valid. Please check configuration.");
-            }
-            throw new Error(`Gemini API error: ${errorBody?.error?.message || 'Request failed'}`);
-        }
-
-        const data = await response.json();
-        const feedbackText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        return feedbackText || "Could not retrieve feedback from AI.";
-
-    } catch (e) {
-        console.error("Gemini Feedback Generation failed:", e);
-        return `Failed to get AI feedback: ${e.message}`;
-    }
+    // This should not be used anymore - backend handles AI feedback
+    return generateMockFeedback(codeContent, language);
 }
 
 /**
@@ -242,11 +167,56 @@ export default function CodingZonePage() {
     const [isExecutionSuccess, setIsExecutionSuccess] = useState(false); // Track last run
     const [showCustomInputs, setShowCustomInputs] = useState(false);
     const [customInput, setCustomInput] = useState('');
+    const [codeSubmissions, setCodeSubmissions] = useState([]);
+    const [selectedSubmission, setSelectedSubmission] = useState(null);
+    const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+    const [loadingSubmissions, setLoadingSubmissions] = useState(false);
+    const user = getUser();
+
+    // Load code submissions from backend
+    const loadCodeSubmissions = async () => {
+        try {
+            setLoadingSubmissions(true);
+            const response = await studentAPI.getCodeSubmissions();
+            if (response.success) {
+                setCodeSubmissions(response.data || []);
+            }
+        } catch (error) {
+            console.error('Error loading code submissions:', error);
+            toast.error('Failed to load code submissions');
+        } finally {
+            setLoadingSubmissions(false);
+        }
+    };
+
+    // Load submissions on mount
+    useEffect(() => {
+        loadCodeSubmissions();
+    }, []);
 
     // Save code to localStorage whenever it changes
     useEffect(() => {
         localStorage.setItem('codingZone_code', code);
     }, [code]);
+
+    const getLanguageBadge = (lang) => {
+        const colors = {
+            python: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
+            java: 'bg-orange-500/10 text-orange-500 border-orange-500/20',
+            cpp: 'bg-purple-500/10 text-purple-500 border-purple-500/20',
+            c: 'bg-gray-500/10 text-gray-500 border-gray-500/20',
+            javascript: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
+        };
+        return colors[lang] || 'bg-muted text-muted-foreground';
+    };
+
+    const handleDeleteSubmission = async (submissionId) => {
+        // Note: Backend doesn't have delete endpoint yet
+        toast.info('Delete functionality coming soon');
+        // Future implementation:
+        // await studentAPI.deleteCodeSubmission(submissionId);
+        // loadCodeSubmissions();
+    };
 
     const downloadCode = () => {
         const langConfig = languageMap[language];
@@ -312,33 +282,51 @@ export default function CodingZonePage() {
         setIsSubmitting(true);
         setFeedback('Generating AI feedback, please wait...');
         setScore(null);
-        toast.info("Submitting code and generating feedback...");
+        toast.info("Submitting code and generating AI feedback...");
 
         try {
-            // 1. Get AI Feedback
-            const aiFeedback = await getCodeFeedback(code, language);
-            setFeedback(aiFeedback);
+            const langConfig = languageMap[language];
+            const fileName = `code.${langConfig?.extension || 'txt'}`;
 
-            // 2. Calculate Score (based on last execution)
-            const scoreResult = calculateScore(code, isExecutionSuccess);
-            setScore(scoreResult.score);
-            setScoreExplanation(scoreResult.explanation.join('\n'));
+            // Submit code to backend - AI feedback is generated server-side
+            const response = await studentAPI.submitCode({
+                code,
+                language,
+                fileName,
+                output: output || '',
+                executionSuccess: isExecutionSuccess,
+                problemId: 'coding-zone'
+            });
 
-            // 3. Update Output Panel
-            setOutput(`--- Submission Results ---
-Status: Submitted
-Score: ${scoreResult.score}/100
-(Based on code length and last execution status)
+            if (response.success && response.data) {
+                const submission = response.data;
+                
+                // Set AI feedback from backend
+                setFeedback(submission.aiFeedback || 'No feedback available');
+                setScore(submission.score || 0);
+                
+                // Update output panel
+                setOutput(`--- Submission Results ---
+Status: Submitted Successfully
+Score: ${submission.score || 0}/100
+(Based on code length and execution status)
 
 --- AI Feedback ---
-${aiFeedback}
+${submission.aiFeedback || 'No feedback available'}
 `);
 
-            toast.success('Code submitted and analyzed!');
+                // Reload code submissions list
+                loadCodeSubmissions();
+
+                toast.success('Code submitted successfully! AI feedback generated.');
+            } else {
+                throw new Error(response.message || 'Submission failed');
+            }
 
         } catch (error) {
-            toast.error(`Submission failed: ${error.message}`);
-            setFeedback(`Failed to get feedback: ${error.message}`);
+            console.error('Submit code error:', error);
+            toast.error(`Submission failed: ${error.message || 'Unknown error'}`);
+            setFeedback(`Failed to submit code: ${error.message || 'Unknown error'}`);
         } finally {
             setIsSubmitting(false);
         }
@@ -548,6 +536,162 @@ ${aiFeedback}
                     </Card>
                 </motion.div>
             </div>
+
+            {/* Code Submissions Section */}
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <FileCode className="h-5 w-5 text-primary" />
+                        Code Submissions
+                    </CardTitle>
+                    <CardDescription>View your submitted code with AI feedback</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {codeSubmissions.length > 0 ? (
+                        <div className="space-y-3">
+                            {codeSubmissions.map((submission, index) => (
+                                <motion.div
+                                    key={submission.id}
+                                    initial={{ opacity: 0, y: 20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: index * 0.05 }}
+                                    className="p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                                >
+                                    <div className="flex items-start justify-between">
+                                        <div className="flex-1 space-y-2">
+                                            <div className="flex items-center gap-3">
+                                                <Badge className={`border ${getLanguageBadge(submission.language)}`}>
+                                                    {submission.language?.toUpperCase()}
+                                                </Badge>
+                                                <span className="text-sm font-medium">{submission.fileName}</span>
+                                                {submission.score !== null && submission.score !== undefined && (
+                                                    <Badge variant="outline" className="ml-auto">
+                                                        Score: {submission.score}/100
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                            <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                                                <div className="flex items-center gap-1">
+                                                    <Calendar className="h-3 w-3" />
+                                                    <span>{new Date(submission.submittedAt).toLocaleString()}</span>
+                                                </div>
+                                                {submission.executionSuccess !== undefined && (
+                                                    <>
+                                                        <span>•</span>
+                                                        <span className={submission.executionSuccess ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+                                                            {submission.executionSuccess ? 'Executed Successfully' : 'Execution Failed'}
+                                                        </span>
+                                                    </>
+                                                )}
+                                            </div>
+                                            {submission.aiFeedback && (
+                                                <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-950/20 rounded text-xs text-blue-900 dark:text-blue-200 line-clamp-2">
+                                                    AI Feedback: {submission.aiFeedback.substring(0, 150)}...
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-2 ml-4">
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => {
+                                                    setSelectedSubmission(submission);
+                                                    setIsPreviewOpen(true);
+                                                }}
+                                            >
+                                                <Eye className="h-4 w-4 mr-1" />
+                                                View
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                className="text-destructive hover:text-destructive"
+                                                onClick={() => handleDeleteSubmission(submission.id)}
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="text-center py-8">
+                            <FileCode className="h-12 w-12 text-muted-foreground mx-auto mb-3 opacity-50" />
+                            <p className="text-muted-foreground">No code submissions yet</p>
+                            <p className="text-xs text-muted-foreground mt-1">Submit your code to see it here</p>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
+            {/* Submission Preview Dialog */}
+            <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+                <DialogContent className="max-w-4xl max-h-[85vh]">
+                    <DialogHeader>
+                        <DialogTitle>{selectedSubmission?.fileName}</DialogTitle>
+                        <DialogDescription>
+                            Submitted on {selectedSubmission && new Date(selectedSubmission.submittedAt).toLocaleString()}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-2">
+                            <Badge className={getLanguageBadge(selectedSubmission?.language)}>
+                                {selectedSubmission?.language?.toUpperCase()}
+                            </Badge>
+                            {selectedSubmission?.score !== null && (
+                                <Badge variant="outline">
+                                    Score: {selectedSubmission?.score}/100
+                                </Badge>
+                            )}
+                            {selectedSubmission?.executionSuccess !== undefined && (
+                                <Badge variant={selectedSubmission?.executionSuccess ? 'default' : 'destructive'}>
+                                    {selectedSubmission?.executionSuccess ? 'Executed Successfully' : 'Execution Failed'}
+                                </Badge>
+                            )}
+                        </div>
+                        <div className="space-y-2">
+                            <p className="text-sm font-semibold">Code:</p>
+                            <ScrollArea className="h-[300px] border rounded-lg bg-slate-950 p-4">
+                                <pre className="text-sm font-mono text-slate-100 whitespace-pre-wrap">
+                                    <code>{selectedSubmission?.code || selectedSubmission?.codeContent || 'No code content'}</code>
+                                </pre>
+                            </ScrollArea>
+                        </div>
+                        {selectedSubmission?.output && (
+                            <div className="space-y-2">
+                                <p className="text-sm font-semibold">Output:</p>
+                                <ScrollArea className="h-[150px] border rounded-lg bg-slate-950 p-4">
+                                    <pre className="text-sm font-mono text-slate-300 whitespace-pre-wrap">
+                                        {selectedSubmission.output}
+                                    </pre>
+                                </ScrollArea>
+                            </div>
+                        )}
+                        {(selectedSubmission?.aiFeedback || selectedSubmission?.feedback) && (
+                            <div className="space-y-2">
+                                <p className="text-sm font-semibold">AI Feedback:</p>
+                                <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                                    <div className="prose prose-sm dark:prose-invert max-w-none text-blue-900 dark:text-blue-200">
+                                        {(selectedSubmission.aiFeedback || selectedSubmission.feedback || '').split('\n').map((line, i) => {
+                                            if (line.startsWith('##')) {
+                                                return <h2 key={i} className="text-base font-bold mt-3 mb-1">{line.replace('##', '')}</h2>;
+                                            } else if (line.startsWith('###')) {
+                                                return <h3 key={i} className="text-sm font-semibold mt-2 mb-1">{line.replace('###', '')}</h3>;
+                                            } else if (line.startsWith('*') || line.startsWith('-')) {
+                                                return <li key={i} className="ml-4 text-sm">{line.substring(1)}</li>;
+                                            } else if (line.trim()) {
+                                                return <p key={i} className="text-sm mb-1">{line}</p>;
+                                            }
+                                            return <br key={i} />;
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

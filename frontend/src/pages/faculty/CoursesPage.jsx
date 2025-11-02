@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,13 +7,15 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { getLocalData, setLocalData, getUser } from '@/utils/storage';
-import { Plus, Edit, Trash2, Users, BookOpen, Clock, Link as LinkIcon, Video, Bell, ArrowLeft, Copy, ExternalLink, Search, Laptop, GraduationCap, RefreshCw, Key } from 'lucide-react';
+import { facultyAPI } from '@/utils/api';
+import { getUser } from '@/utils/storage';
+import { Plus, Edit, Trash2, Users, BookOpen, Clock, Link as LinkIcon, Video, Bell, ArrowLeft, Copy, ExternalLink, Search, Laptop, GraduationCap, RefreshCw, Key, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 
 export default function CoursesPage() {
-    const [courses, setCourses] = useState(getLocalData('courses', []));
+    const [courses, setCourses] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [selectedCourse, setSelectedCourse] = useState(null);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [editingCourse, setEditingCourse] = useState(null);
@@ -24,64 +26,65 @@ export default function CoursesPage() {
         name: '',
         code: '',
         description: '',
-        semester: '',
-        credits: '',
-        class: '',
-        totalStudents: '',
+        semester: 'Fall 2025',
+        credits: '3',
+        class: 'A',
     });
+    const user = getUser();
 
-    // Course management states
-    const [classroomLink, setClassroomLink] = useState('');
-    const [newStudentEmail, setNewStudentEmail] = useState('');
-    const [announcementTitle, setAnnouncementTitle] = useState('');
-    const [announcementContent, setAnnouncementContent] = useState('');
-    const [meetingTitle, setMeetingTitle] = useState('');
-    const [meetingPlatform, setMeetingPlatform] = useState('google');
-    const [courseCode, setCourseCode] = useState('');
-
-    // Get course-specific data
-    const getCourseStudents = (courseId) => {
-        return getLocalData('courseStudents', {})[courseId] || [];
+    // Load courses from backend
+    const loadCourses = async () => {
+        try {
+            setLoading(true);
+            const response = await facultyAPI.getCourses();
+            if (response.success) {
+                setCourses(response.data || []);
+            }
+        } catch (error) {
+            console.error('Error loading courses:', error);
+            toast.error('Failed to load courses');
+        } finally {
+            setLoading(false);
+        }
     };
 
-    const getCourseAnnouncements = (courseId) => {
-        return getLocalData('courseAnnouncements', {})[courseId] || [];
-    };
+    useEffect(() => {
+        loadCourses();
+    }, []);
 
     const handleInputChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
 
-        if (editingCourse) {
-            const updatedCourses = courses.map(course =>
-                course.id === editingCourse.id ? { ...course, ...formData } : course
-            );
-            setCourses(updatedCourses);
-            setLocalData('courses', updatedCourses);
-            toast.success('Course updated successfully');
-        } else {
-            const newCourse = {
-                id: Date.now(),
-                ...formData,
-                students: 0,
-                progress: 0,
-                createdBy: user?.id || null,
-                createdByName: user?.fullName || 'Unknown',
-                ownerRole: user?.role || 'faculty',
-                createdAt: new Date().toISOString(),
-            };
-            const updatedCourses = [...courses, newCourse];
-            setCourses(updatedCourses);
-            setLocalData('courses', updatedCourses);
-            toast.success('Course created successfully');
+        if (!formData.name || !formData.code || !formData.credits) {
+            toast.error('Please fill in all required fields');
+            return;
         }
 
-        setIsDialogOpen(false);
-        setEditingCourse(null);
-        setFormData({ name: '', code: '', description: '', semester: '', credits: '', class: '', totalStudents: '' });
+        try {
+            if (editingCourse) {
+                const response = await facultyAPI.updateCourse(editingCourse.id, formData);
+                if (response.success) {
+                    toast.success('Course updated successfully');
+                    loadCourses();
+                }
+            } else {
+                const response = await facultyAPI.createCourse(formData);
+                if (response.success) {
+                    toast.success('Course created successfully');
+                    loadCourses();
+                }
+            }
+
+            setIsDialogOpen(false);
+            setEditingCourse(null);
+            setFormData({ name: '', code: '', description: '', semester: 'Fall 2025', credits: '3', class: 'A' });
+        } catch (error) {
+            toast.error(error.message || 'Failed to save course');
+        }
     };
 
     const handleEdit = (course) => {
@@ -90,19 +93,23 @@ export default function CoursesPage() {
             name: course.name,
             code: course.code,
             description: course.description || '',
-            semester: course.semester || '',
-            credits: course.credits || '',
-            class: course.class || '',
-            totalStudents: course.totalStudents || '',
+            semester: course.semester || 'Fall 2025',
+            credits: course.credits || '3',
+            class: course.class || 'A',
         });
         setIsDialogOpen(true);
     };
 
-    const handleDelete = (courseId) => {
-        const updatedCourses = courses.filter(course => course.id !== courseId);
-        setCourses(updatedCourses);
-        setLocalData('courses', updatedCourses);
-        toast.success('Course deleted successfully');
+    const handleDelete = async (courseId) => {
+        try {
+            const response = await facultyAPI.deleteCourse(courseId);
+            if (response.success) {
+                toast.success('Course deleted successfully');
+                loadCourses();
+            }
+        } catch (error) {
+            toast.error(error.message || 'Failed to delete course');
+        }
         setDeleteDialogOpen(false);
         setCourseToDelete(null);
     };
@@ -114,142 +121,24 @@ export default function CoursesPage() {
     };
 
     const handleShareLink = (course) => {
-        // Generate a unique enrollment code
-        const randomPart = Math.random().toString(36).substring(2, 8).toUpperCase();
-        const enrollmentCode = `${course.code}-${randomPart}`;
-
-        // Save the enrollment code mapping
-        const allEnrollmentCodes = getLocalData('enrollmentCodes', {});
-        allEnrollmentCodes[enrollmentCode] = {
-            courseId: course.id,
-            courseName: course.name,
-            courseCode: course.code,
-            instructor: getUser()?.fullName,
-            createdAt: new Date().toISOString(),
-            active: true
-        };
-        setLocalData('enrollmentCodes', allEnrollmentCodes);
-
-        // Save the code for this course
-        const courseCodes = getLocalData('courseCodes', {});
-        courseCodes[course.id] = enrollmentCode;
-        setLocalData('courseCodes', courseCodes);
-
-        toast.success('New enrollment code generated');
-        return enrollmentCode;
+        // The enrollment code is simply the course code
+        toast.success(`Enrollment code is: ${course.code}`);
+        return course.code;
     };
 
     const handleRegenerateLink = (course) => {
-        handleShareLink(course);
-        toast.success('New enrollment link generated');
+        // Since we're using course code, just show it
+        toast.info(`Enrollment code: ${course.code}`);
     };
 
-    const handleCopyLink = (course) => {
-        const link = getLocalData('courseLinks', {})[course.id];
-        if (link) {
-            navigator.clipboard.writeText(link);
-            toast.success('Link copied to clipboard');
-        } else {
-            toast.error('No classroom link set for this course');
-        }
-    };
 
-    const handleAddStudent = (course) => {
-        if (newStudentEmail.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newStudentEmail)) {
-            const allStudents = getLocalData('courseStudents', {});
-            const courseStudents = allStudents[course.id] || [];
 
-            if (courseStudents.find(s => s.email === newStudentEmail)) {
-                toast.error('Student already added');
-                return;
-            }
-
-            const newStudent = {
-                id: Date.now(),
-                email: newStudentEmail,
-                name: newStudentEmail.split('@')[0],
-                addedDate: new Date().toISOString()
-            };
-
-            allStudents[course.id] = [...courseStudents, newStudent];
-            setLocalData('courseStudents', allStudents);
-
-            // Update course student count
-            const updatedCourses = courses.map(c =>
-                c.id === course.id ? { ...c, students: (c.students || 0) + 1 } : c
-            );
-            setCourses(updatedCourses);
-            setLocalData('courses', updatedCourses);
-
-            toast.success('Student added successfully');
-            setNewStudentEmail('');
-        } else {
-            toast.error('Please enter a valid email address');
-        }
-    };
-
-    const handleRemoveStudent = (course, studentId) => {
-        const allStudents = getLocalData('courseStudents', {});
-        const courseStudents = allStudents[course.id] || [];
-        allStudents[course.id] = courseStudents.filter(s => s.id !== studentId);
-        setLocalData('courseStudents', allStudents);
-
-        // Update course student count
-        const updatedCourses = courses.map(c =>
-            c.id === course.id ? { ...c, students: Math.max((c.students || 0) - 1, 0) } : c
-        );
-        setCourses(updatedCourses);
-        setLocalData('courses', updatedCourses);
-
-        toast.success('Student removed');
-    };
-
-    const handleCreateAnnouncement = (course) => {
-        if (announcementTitle.trim() && announcementContent.trim()) {
-            const allAnnouncements = getLocalData('courseAnnouncements', {});
-            const courseAnnouncements = allAnnouncements[course.id] || [];
-
-            const newAnnouncement = {
-                id: Date.now(),
-                title: announcementTitle,
-                content: announcementContent,
-                date: new Date().toISOString(),
-                courseId: course.id
-            };
-
-            allAnnouncements[course.id] = [newAnnouncement, ...courseAnnouncements];
-            setLocalData('courseAnnouncements', allAnnouncements);
-
-            toast.success('Announcement posted successfully');
-            setAnnouncementTitle('');
-            setAnnouncementContent('');
-        } else {
-            toast.error('Please fill in all fields');
-        }
-    };
-
-    const handleCreateMeeting = (course) => {
-        if (meetingTitle.trim()) {
-            const meetingLink = meetingPlatform === 'google'
-                ? `https://meet.google.com/new?title=${encodeURIComponent(meetingTitle)}`
-                : `https://zoom.us/start/videomeeting?title=${encodeURIComponent(meetingTitle)}`;
-
-            window.open(meetingLink, '_blank');
-            toast.success(`Opening ${meetingPlatform === 'google' ? 'Google Meet' : 'Zoom'} to create meeting`);
-            setMeetingTitle('');
-        } else {
-            toast.error('Please enter a meeting title');
-        }
-    };
-
-    const user = getUser();
     // Simplify permission check - allow all faculty to create courses
     const canCreate = true; // Remove complex role check since faculty can always create
 
     if (selectedCourse) {
-        const courseStudents = getCourseStudents(selectedCourse.id);
-        const courseAnnouncements = getCourseAnnouncements(selectedCourse.id);
-        const savedCode = getLocalData('courseCodes', {})[selectedCourse.id] || '';
+        const courseStudents = selectedCourse.students || [];
+        const savedCode = selectedCourse.code || '';
 
         return (
             <div className="space-y-6">
@@ -267,22 +156,14 @@ export default function CoursesPage() {
                     </CardHeader>
                     <CardContent>
                         <Tabs defaultValue="classroom">
-                            <TabsList className="grid w-full grid-cols-4">
+                            <TabsList className="grid w-full grid-cols-2">
                                 <TabsTrigger value="classroom">
                                     <LinkIcon className="h-4 w-4 mr-2" />
                                     Enrollment Code
                                 </TabsTrigger>
                                 <TabsTrigger value="students">
                                     <Users className="h-4 w-4 mr-2" />
-                                    Students
-                                </TabsTrigger>
-                                <TabsTrigger value="announcements">
-                                    <Bell className="h-4 w-4 mr-2" />
-                                    Announcements
-                                </TabsTrigger>
-                                <TabsTrigger value="meetings">
-                                    <Video className="h-4 w-4 mr-2" />
-                                    Meetings
+                                    Students ({courseStudents.length})
                                 </TabsTrigger>
                             </TabsList>
 
@@ -295,173 +176,49 @@ export default function CoursesPage() {
                                         </p>
                                     </div>
 
-                                    {savedCode ? (
-                                        <div className="space-y-3">
-                                            <div className="p-4 bg-muted rounded-lg">
-                                                <div className="flex items-start justify-between gap-3">
-                                                    <div className="flex-1">
-                                                        <p className="text-sm font-medium mb-2">Current Enrollment Code:</p>
-                                                        <code className="text-2xl font-mono bg-background px-4 py-2 rounded border block">
-                                                            {savedCode}
-                                                        </code>
-                                                    </div>
+                                    <div className="space-y-3">
+                                        <div className="p-4 bg-muted rounded-lg">
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div className="flex-1">
+                                                    <p className="text-sm font-medium mb-2">Current Enrollment Code:</p>
+                                                    <code className="text-2xl font-mono bg-background px-4 py-2 rounded border block">
+                                                        {savedCode}
+                                                    </code>
                                                 </div>
                                             </div>
-                                            <div className="flex gap-2">
-                                                <Button
-                                                    variant="outline"
-                                                    className="flex-1"
-                                                    onClick={() => {
-                                                        navigator.clipboard.writeText(savedCode);
-                                                        toast.success('Code copied to clipboard');
-                                                    }}
-                                                >
-                                                    <Copy className="h-4 w-4 mr-2" />
-                                                    Copy Code
-                                                </Button>
-                                                <Button
-                                                    variant="outline"
-                                                    className="flex-1"
-                                                    onClick={() => {
-                                                        const newCode = handleShareLink(selectedCourse);
-                                                        setCourseCode(newCode);
-                                                    }}
-                                                >
-                                                    <RefreshCw className="h-4 w-4 mr-2" />
-                                                    Generate New Code
-                                                </Button>
-                                            </div>
                                         </div>
-                                    ) : (
-                                        <div className="text-center py-8">
-                                            <Key className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-                                            <p className="text-sm text-muted-foreground mb-4">
-                                                No enrollment code generated yet
-                                            </p>
-                                            <Button onClick={() => {
-                                                const code = handleShareLink(selectedCourse);
-                                                setCourseCode(code);
-                                            }}>
-                                                <Key className="h-4 w-4 mr-2" />
-                                                Generate Enrollment Code
-                                            </Button>
-                                        </div>
-                                    )}
+                                        <Button
+                                            variant="outline"
+                                            className="w-full"
+                                            onClick={() => {
+                                                navigator.clipboard.writeText(savedCode);
+                                                toast.success('Code copied to clipboard');
+                                            }}
+                                        >
+                                            <Copy className="h-4 w-4 mr-2" />
+                                            Copy Code
+                                        </Button>
+                                    </div>
                                 </div>
                             </TabsContent>
 
                             <TabsContent value="students" className="space-y-4">
-                                <div className="space-y-3">
-                                    <Label>Add Student</Label>
-                                    <div className="flex gap-2">
-                                        <Input
-                                            placeholder="Enter student email"
-                                            type="email"
-                                            value={newStudentEmail}
-                                            onChange={(e) => setNewStudentEmail(e.target.value)}
-                                        />
-                                        <Button onClick={() => handleAddStudent(selectedCourse)}>
-                                            <Plus className="h-4 w-4 mr-2" />
-                                            Add
-                                        </Button>
-                                    </div>
-                                </div>
                                 <div className="space-y-2">
                                     <Label>Enrolled Students ({courseStudents.length})</Label>
                                     {courseStudents.length > 0 ? (
                                         <div className="space-y-2">
-                                            {courseStudents.map(student => (
-                                                <div key={student.id} className="p-3 bg-muted rounded-lg flex items-center justify-between">
+                                            {courseStudents.map((student, idx) => (
+                                                <div key={student._id || idx} className="p-3 bg-muted rounded-lg flex items-center justify-between">
                                                     <div>
-                                                        <p className="font-medium">{student.name}</p>
+                                                        <p className="font-medium">{student.fullName || student.name || 'Student'}</p>
                                                         <p className="text-sm text-muted-foreground">{student.email}</p>
                                                     </div>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        onClick={() => handleRemoveStudent(selectedCourse, student.id)}
-                                                    >
-                                                        <Trash2 className="h-4 w-4 text-destructive" />
-                                                    </Button>
                                                 </div>
                                             ))}
                                         </div>
                                     ) : (
                                         <p className="text-sm text-muted-foreground text-center py-8">No students enrolled yet</p>
                                     )}
-                                </div>
-                            </TabsContent>
-
-                            <TabsContent value="announcements" className="space-y-4">
-                                <div className="space-y-3">
-                                    <Label>Create Announcement</Label>
-                                    <Input
-                                        placeholder="Announcement title"
-                                        value={announcementTitle}
-                                        onChange={(e) => setAnnouncementTitle(e.target.value)}
-                                    />
-                                    <Textarea
-                                        placeholder="Announcement content"
-                                        value={announcementContent}
-                                        onChange={(e) => setAnnouncementContent(e.target.value)}
-                                        rows={3}
-                                    />
-                                    <Button onClick={() => handleCreateAnnouncement(selectedCourse)}>
-                                        <Bell className="h-4 w-4 mr-2" />
-                                        Post Announcement
-                                    </Button>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>Recent Announcements</Label>
-                                    {courseAnnouncements.length > 0 ? (
-                                        <div className="space-y-2">
-                                            {courseAnnouncements.map(announcement => (
-                                                <div key={announcement.id} className="p-4 bg-muted rounded-lg">
-                                                    <h4 className="font-semibold">{announcement.title}</h4>
-                                                    <p className="text-sm text-muted-foreground mt-1">{announcement.content}</p>
-                                                    <p className="text-xs text-muted-foreground mt-2">
-                                                        {new Date(announcement.date).toLocaleDateString()} at {new Date(announcement.date).toLocaleTimeString()}
-                                                    </p>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <p className="text-sm text-muted-foreground text-center py-8">No announcements yet</p>
-                                    )}
-                                </div>
-                            </TabsContent>
-
-                            <TabsContent value="meetings" className="space-y-4">
-                                <div className="space-y-3">
-                                    <Label>Create Meeting</Label>
-                                    <Input
-                                        placeholder="Meeting title"
-                                        value={meetingTitle}
-                                        onChange={(e) => setMeetingTitle(e.target.value)}
-                                    />
-                                    <div className="flex gap-2">
-                                        <Button
-                                            variant={meetingPlatform === 'google' ? 'default' : 'outline'}
-                                            onClick={() => setMeetingPlatform('google')}
-                                            className="flex-1"
-                                        >
-                                            Google Meet
-                                        </Button>
-                                        <Button
-                                            variant={meetingPlatform === 'zoom' ? 'default' : 'outline'}
-                                            onClick={() => setMeetingPlatform('zoom')}
-                                            className="flex-1"
-                                        >
-                                            Zoom
-                                        </Button>
-                                    </div>
-                                    <Button onClick={() => handleCreateMeeting(selectedCourse)} className="w-full">
-                                        <Video className="h-4 w-4 mr-2" />
-                                        Create {meetingPlatform === 'google' ? 'Google Meet' : 'Zoom'} Meeting
-                                    </Button>
-                                    <p className="text-xs text-muted-foreground">
-                                        Note: This will open {meetingPlatform === 'google' ? 'Google Meet' : 'Zoom'} in a new tab to create the meeting.
-                                    </p>
                                 </div>
                             </TabsContent>
                         </Tabs>
@@ -495,7 +252,7 @@ export default function CoursesPage() {
                                 className="bg-yellow-500 hover:bg-yellow-600 text-black font-semibold"
                                 onClick={() => {
                                     setEditingCourse(null);
-                                    setFormData({ name: '', code: '', description: '', semester: '', credits: '', class: '', totalStudents: '' });
+                                    setFormData({ name: '', code: '', description: '', semester: 'Fall 2025', credits: '3', class: 'A' });
                                     setIsDialogOpen(true);
                                 }}
                             >
@@ -574,18 +331,7 @@ export default function CoursesPage() {
                                             />
                                         </div>
                                         <div>
-                                            <Label htmlFor="totalStudents">Total Students</Label>
-                                            <Input
-                                                id="totalStudents"
-                                                name="totalStudents"
-                                                type="number"
-                                                value={formData.totalStudents}
-                                                onChange={handleInputChange}
-                                                placeholder="e.g., 60"
-                                            />
-                                        </div>
-                                        <div>
-                                            <Label htmlFor="description">Description</Label>
+                                            <Label htmlFor="description">Description (Optional)</Label>
                                             <Textarea
                                                 id="description"
                                                 name="description"
@@ -616,65 +362,71 @@ export default function CoursesPage() {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {courses
-                    .filter(course =>
-                        !searchQuery ||
-                        course.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                        course.code?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                        course.class?.toLowerCase().includes(searchQuery.toLowerCase())
-                    )
-                    .map((course, index) => (
-                        <motion.div
-                            key={course.id}
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: index * 0.1 }}
-                        >
-                            <Card className="hover:shadow-lg transition-shadow cursor-pointer relative bg-card border-border" onClick={() => setSelectedCourse(course)}>
-                                {/* Delete button positioned at top right */}
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="absolute top-3 right-3 h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        openDeleteDialog(course, e);
-                                    }}
-                                >
-                                    <Trash2 className="h-4 w-4" />
-                                </Button>
+            {loading ? (
+                <div className="flex items-center justify-center py-12">
+                    <Loader2 className="h-8 w-8 text-muted-foreground animate-spin" />
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {courses
+                        .filter(course =>
+                            !searchQuery ||
+                            course.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                            course.code?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                            course.class?.toLowerCase().includes(searchQuery.toLowerCase())
+                        )
+                        .map((course, index) => (
+                            <motion.div
+                                key={course.id}
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: index * 0.1 }}
+                            >
+                                <Card className="hover:shadow-lg transition-shadow cursor-pointer relative bg-card border-border" onClick={() => setSelectedCourse(course)}>
+                                    {/* Delete button positioned at top right */}
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="absolute top-3 right-3 h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            openDeleteDialog(course, e);
+                                        }}
+                                    >
+                                        <Trash2 className="h-4 w-4" />
+                                    </Button>
 
-                                <CardHeader className="pb-3">
-                                    <div className="flex items-start gap-4">
-                                        <div className="p-3 bg-primary/10 rounded-lg">
-                                            <Laptop className="h-6 w-6 text-primary" />
+                                    <CardHeader className="pb-3">
+                                        <div className="flex items-start gap-4">
+                                            <div className="p-3 bg-primary/10 rounded-lg">
+                                                <Laptop className="h-6 w-6 text-primary" />
+                                            </div>
+                                            <div className="flex-1">
+                                                <CardTitle className="text-lg mb-1">{course.name}</CardTitle>
+                                                <CardDescription className="text-xs">
+                                                    Prof. {course.createdByName || getUser()?.fullName || 'Unknown'}
+                                                </CardDescription>
+                                                <CardDescription className="text-xs mt-0.5">{course.code}</CardDescription>
+                                            </div>
                                         </div>
-                                        <div className="flex-1">
-                                            <CardTitle className="text-lg mb-1">{course.name}</CardTitle>
-                                            <CardDescription className="text-xs">
-                                                Prof. {course.createdByName || getUser()?.fullName || 'Unknown'}
-                                            </CardDescription>
-                                            <CardDescription className="text-xs mt-0.5">{course.code}</CardDescription>
+                                    </CardHeader>
+                                    <CardContent className="space-y-3 pt-0">
+                                        <div className="flex items-center gap-2 text-sm text-yellow-600 dark:text-yellow-500">
+                                            <GraduationCap className="h-4 w-4" />
+                                            <span className="font-medium">{course.class || 'N/A'}</span>
                                         </div>
-                                    </div>
-                                </CardHeader>
-                                <CardContent className="space-y-3 pt-0">
-                                    <div className="flex items-center gap-2 text-sm text-yellow-600 dark:text-yellow-500">
-                                        <GraduationCap className="h-4 w-4" />
-                                        <span className="font-medium">{course.class || 'N/A'}</span>
-                                    </div>
-                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                        <Users className="h-4 w-4" />
-                                        <span>{course.students || 0} Students Enrolled</span>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </motion.div>
-                    ))}
-            </div>
+                                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                            <Users className="h-4 w-4" />
+                                            <span>{course.students || 0} Students Enrolled</span>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            </motion.div>
+                        ))}
+                </div>
+            )}
 
-            {courses.length === 0 && (
+            {!loading && courses.length === 0 && (
                 <Card className="p-12 text-center">
                     <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                     <h3 className="text-lg font-semibold mb-2">No courses yet</h3>

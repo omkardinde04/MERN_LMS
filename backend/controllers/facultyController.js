@@ -538,13 +538,15 @@ export const getSubmissions = async (req, res) => {
 // @access  Private (Faculty)
 export const gradeSubmission = async (req, res) => {
     try {
-        const { score, feedback } = req.body;
+        const { score, feedback, plagiarismReportUrl, plagiarismReport } = req.body;
+        const io = req.app.get('io');
 
         const submission = await Submission.findById(req.params.id)
             .populate({
                 path: 'assignment',
                 populate: { path: 'course' }
-            });
+            })
+            .populate('student', 'fullName email');
 
         if (!submission) {
             return res.status(404).json({
@@ -567,12 +569,45 @@ export const gradeSubmission = async (req, res) => {
         submission.gradedAt = new Date();
         submission.gradedBy = req.user.id;
 
+        // Add plagiarism report if provided
+        if (plagiarismReportUrl) {
+            submission.plagiarismReportUrl = plagiarismReportUrl;
+        }
+
+        if (plagiarismReport) {
+            submission.plagiarismReport = {
+                similarity: plagiarismReport.similarity || null,
+                sources: plagiarismReport.sources || [],
+                reportedAt: new Date()
+            };
+        }
+
         await submission.save();
+
+        // Populate full submission data for socket emission
+        const populatedSubmission = await Submission.findById(submission._id)
+            .populate('assignment')
+            .populate('student', 'fullName email');
+
+        // Emit real-time update to the student
+        if (io && submission.student._id) {
+            io.to(`student-${submission.student._id}`).emit('assignment-graded', {
+                submissionId: submission._id,
+                assignmentId: submission.assignment._id,
+                score: submission.score,
+                feedback: submission.feedback,
+                plagiarismReportUrl: submission.plagiarismReportUrl,
+                plagiarismReport: submission.plagiarismReport,
+                gradedAt: submission.gradedAt,
+                data: populatedSubmission
+            });
+            console.log(`📤 Emitted assignment-graded event to student ${submission.student._id}`);
+        }
 
         res.status(200).json({
             success: true,
             message: 'Submission graded successfully',
-            data: submission
+            data: populatedSubmission
         });
 
     } catch (error) {

@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Switch } from '@/components/ui/switch';
 import { getUser, setUser } from '@/utils/storage';
+import { userAPI } from '@/utils/api';
 import { useTheme } from '@/contexts/ThemeContext';
 import { User, Bell, Shield, Palette, Upload, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -34,12 +35,22 @@ export default function SettingsPage() {
         confirm: '',
     });
 
-    const handleProfileUpdate = () => {
-        const updatedUser = { ...user, ...profile, avatar: avatar };
-        setUser(updatedUser);
-        toast.success('Profile updated successfully');
-        // Force page reload to reflect changes on home page
-        setTimeout(() => window.location.reload(), 500);
+    const handleProfileUpdate = async () => {
+        try {
+            const response = await userAPI.updateProfile(profile);
+            
+            if (response.success) {
+                // Update local storage with new user data
+                const updatedUser = { ...user, ...response.user };
+                setUser(updatedUser);
+                toast.success(response.message || 'Profile updated successfully');
+                // Force page reload to reflect changes on home page
+                setTimeout(() => window.location.reload(), 500);
+            }
+        } catch (error) {
+            console.error('Profile update error:', error);
+            toast.error(error.message || 'Failed to update profile');
+        }
     };
 
     const handleAvatarChange = (e) => {
@@ -58,11 +69,21 @@ export default function SettingsPage() {
             }
             
             const reader = new FileReader();
-            reader.onloadend = () => {
-                setAvatar(reader.result);
-                const updatedUser = { ...user, avatar: reader.result };
-                setUser(updatedUser);
-                toast.success('Profile picture updated');
+            reader.onloadend = async () => {
+                const avatarDataUrl = reader.result;
+                try {
+                    const response = await userAPI.updateAvatar(avatarDataUrl);
+                    
+                    if (response.success) {
+                        setAvatar(response.avatar || avatarDataUrl);
+                        const updatedUser = { ...user, avatar: response.avatar || avatarDataUrl };
+                        setUser(updatedUser);
+                        toast.success(response.message || 'Profile picture updated');
+                    }
+                } catch (error) {
+                    console.error('Avatar update error:', error);
+                    toast.error(error.message || 'Failed to update avatar');
+                }
             };
             reader.readAsDataURL(file);
         }
@@ -72,14 +93,23 @@ export default function SettingsPage() {
         fileInputRef.current.click();
     };
 
-    const handleRemoveAvatar = () => {
-        setAvatar(null);
-        const updatedUser = { ...user, avatar: null };
-        setUser(updatedUser);
-        toast.success('Profile picture removed');
+    const handleRemoveAvatar = async () => {
+        try {
+            const response = await userAPI.deleteAvatar();
+            
+            if (response.success) {
+                setAvatar(null);
+                const updatedUser = { ...user, avatar: null };
+                setUser(updatedUser);
+                toast.success(response.message || 'Profile picture removed');
+            }
+        } catch (error) {
+            console.error('Avatar delete error:', error);
+            toast.error(error.message || 'Failed to remove avatar');
+        }
     };
 
-    const handlePasswordChange = () => {
+    const handlePasswordChange = async () => {
         if (!password.current || !password.new || !password.confirm) {
             toast.error('Please fill in all password fields');
             return;
@@ -92,8 +122,18 @@ export default function SettingsPage() {
             toast.error('Password must be at least 6 characters');
             return;
         }
-        setPassword({ current: '', new: '', confirm: '' });
-        toast.success('Password changed successfully');
+        
+        try {
+            const response = await userAPI.changePassword(password.current, password.new);
+            
+            if (response.success) {
+                setPassword({ current: '', new: '', confirm: '' });
+                toast.success(response.message || 'Password changed successfully');
+            }
+        } catch (error) {
+            console.error('Password change error:', error);
+            toast.error(error.message || 'Failed to change password');
+        }
     };
 
     return (

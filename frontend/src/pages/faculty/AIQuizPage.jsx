@@ -9,7 +9,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Brain, Sparkles, FileText, Download, Copy, Send, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
-import { getLocalData, setLocalData } from '@/utils/storage';
+import { getLocalData } from '@/utils/storage';
+import { facultyAPI } from '@/utils/api';
 
 export default function AIQuizPage() {
     const [isGenerating, setIsGenerating] = useState(false);
@@ -43,6 +44,28 @@ export default function AIQuizPage() {
     };
 
     const generateQuiz = async (e) => {
+        e.preventDefault();
+        setIsGenerating(true);
+
+        try {
+            const response = await facultyAPI.generateQuiz(formData);
+            
+            if (response.success) {
+                setGeneratedQuiz(response.data); // The backend returns the formatted quiz
+                toast.success(response.message || 'Quiz generated successfully!');
+            } else {
+                throw new Error(response.message || 'Failed to generate quiz');
+            }
+        } catch (error) {
+            console.error('Quiz generation error:', error);
+            toast.error(error.message || 'Failed to generate quiz. Please try again.');
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
+    // OLD MOCK LOGIC - REMOVE THIS
+    const generateQuiz_MOCK = async (e) => {
         e.preventDefault();
         setIsGenerating(true);
 

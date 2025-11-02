@@ -15,6 +15,7 @@ import {
     gradeSubmission,
     createAnnouncement
 } from '../controllers/facultyController.js';
+import { getAllCodeSubmissions } from '../controllers/codeSubmissionController.js';
 import { protect, authorize } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -50,5 +51,8 @@ router.put('/submissions/:id/grade', gradeSubmission);
 
 // Announcements
 router.post('/announcements', createAnnouncement);
+
+// Code Submissions
+router.get('/code-submissions', getAllCodeSubmissions);
 
 export default router;

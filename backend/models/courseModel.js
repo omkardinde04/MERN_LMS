@@ -48,8 +48,8 @@ const courseSchema = new mongoose.Schema({
     timestamps: true
 });
 
-// Index for faster queries
-courseSchema.index({ code: 1 });
+// Remove duplicate index (unique: true on code already creates an index)
+// courseSchema.index({ code: 1 });
 courseSchema.index({ faculty: 1 });
 
 export default mongoose.model('Course', courseSchema);
