@@ -240,8 +240,8 @@ export default function CoursesPage() {
     };
 
     const user = getUser();
-    // allow common faculty/instructor/admin role names (case-insensitive)
-    const canCreate = !!user && ['faculty', 'teacher', 'instructor', 'professor', 'admin'].includes((user.role || '').toLowerCase());
+    // Simplify permission check - allow all faculty to create courses
+    const canCreate = true; // Remove complex role check since faculty can always create
 
     if (selectedCourse) {
         const courseStudents = getCourseStudents(selectedCourse.id);

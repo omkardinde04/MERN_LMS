@@ -1,11 +1,18 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { getLocalData } from '@/utils/storage';
-import { BookOpen, Bell, FileText, TrendingUp, AlertTriangle } from 'lucide-react';
+import { getLocalData, setLocalData } from '@/utils/storage';
+import { BookOpen, Bell, FileText, TrendingUp, AlertTriangle, PlusCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { toast } from 'sonner';
 
 export default function CoursesPage() {
+    const [enrollDialogOpen, setEnrollDialogOpen] = useState(false);
+    const [enrollmentCode, setEnrollmentCode] = useState('');
     const courses = getLocalData('courses', []);
     const announcements = getLocalData('announcements', []);
     const assignments = getLocalData('assignments', []);
@@ -23,12 +30,97 @@ export default function CoursesPage() {
         return grades.find(g => g.courseId === courseId);
     };
 
+    const handleEnroll = () => {
+        const code = enrollmentCode.trim();
+        if (!code) {
+            toast.error('Please enter an enrollment code');
+            return;
+        }
+
+        // Check if code exists in enrollment codes
+        const allCodes = getLocalData('enrollmentCodes', {});
+        const enrollment = allCodes[code];
+
+        if (!enrollment) {
+            toast.error('Invalid enrollment code');
+            return;
+        }
+
+        // Get the course details
+        const allCourses = getLocalData('courses', []);
+        const course = allCourses.find(c => c.id === enrollment.courseId);
+
+        if (!course) {
+            toast.error('Course not found');
+            return;
+        }
+
+        // Check if already enrolled
+        if (courses.find(c => c.id === course.id)) {
+            toast.error('Already enrolled in this course');
+            return;
+        }
+
+        // Add course to student's courses
+        const updatedCourses = [...courses, course];
+        setLocalData('courses', updatedCourses);
+
+        // Update course student count
+        const courseStudents = getLocalData('courseStudents', {});
+        const studentData = {
+            id: Date.now(),
+            studentId: getUser()?.id,
+            name: getUser()?.fullName || 'Student',
+            email: getUser()?.email || '',
+            enrolledAt: new Date().toISOString()
+        };
+        courseStudents[course.id] = [...(courseStudents[course.id] || []), studentData];
+        setLocalData('courseStudents', courseStudents);
+
+        toast.success(`Successfully enrolled in ${course.name}`);
+        setEnrollDialogOpen(false);
+        setEnrollmentCode('');
+        window.location.reload(); // Refresh to show new course
+    };
+
     return (
         <div className="space-y-6">
-            <div>
-                <h1 className="text-3xl font-bold">My Courses</h1>
-                <p className="text-muted-foreground mt-1">View all your enrolled courses and their details</p>
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-3xl font-bold">My Courses</h1>
+                    <p className="text-muted-foreground mt-1">View all your enrolled courses and their details</p>
+                </div>
+                <Button onClick={() => setEnrollDialogOpen(true)}>
+                    <PlusCircle className="h-4 w-4 mr-2" />
+                    Enroll in Course
+                </Button>
             </div>
+
+            {/* Enrollment Dialog */}
+            <Dialog open={enrollDialogOpen} onOpenChange={setEnrollDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Enroll in Course</DialogTitle>
+                        <DialogDescription>
+                            Enter the enrollment code provided by your instructor
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="enrollmentCode">Enrollment Code</Label>
+                            <Input
+                                id="enrollmentCode"
+                                placeholder="Enter code..."
+                                value={enrollmentCode}
+                                onChange={(e) => setEnrollmentCode(e.target.value)}
+                            />
+                        </div>
+                        <Button className="w-full" onClick={handleEnroll}>
+                            Enroll
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
 
             <div className="grid grid-cols-1 gap-6">
                 {courses.map((course, index) => {
@@ -111,8 +203,8 @@ export default function CoursesPage() {
                                                         </div>
                                                         <div className="text-right">
                                                             <span className={`px-3 py-1 rounded-full text-xs font-medium ${assignment.status === 'submitted'
-                                                                    ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                                                                    : 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300'
+                                                                ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                                                                : 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300'
                                                                 }`}>
                                                                 {assignment.status === 'submitted' ? 'Submitted' : 'Pending'}
                                                             </span>
