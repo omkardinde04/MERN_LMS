@@ -1,314 +1,217 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Calendar as CalendarIcon, BookOpen, FileText, Award, PartyPopper } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { UiCalendar } from '../../components/ui/calendar';
+import FullCalendar from '@fullcalendar/react';
+import dayGridPlugin from '@fullcalendar/daygrid';
+import timeGridPlugin from '@fullcalendar/timegrid';
+import interactionPlugin from '@fullcalendar/interaction';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { getLocalData } from '@/utils/storage';
 
-// ---------------------- Helper Functions ----------------------
-
-const parseLocalDate = (dateString) => new Date(`${dateString}T00:00:00`);
-
-// ---------------------- Static Data ----------------------
-
-const publicHolidays = [
-  { date: '2025-01-01', name: "New Year's Day", type: 'holiday' },
-  { date: '2025-01-26', name: 'Republic Day', type: 'holiday' },
-  { date: '2025-08-15', name: 'Independence Day', type: 'holiday' },
-  { date: '2025-10-02', name: 'Gandhi Jayanti', type: 'holiday' },
-  { date: '2025-11-14', name: 'Diwali', type: 'holiday' },
-  { date: '2025-12-25', name: 'Christmas', type: 'holiday' },
-];
-
-const colorLegend = [
-  { color: 'bg-green-500', label: 'Assignments', type: 'assignment' },
-  { color: 'bg-blue-500', label: 'Tests / Exams', type: 'test' },
-  { color: 'bg-purple-500', label: 'Events', type: 'event' },
-  { color: 'bg-red-500', label: 'Holidays / Breaks', type: 'holiday' },
-];
-
-const getEventIcon = (type) => {
-  switch (type) {
-    case 'assignment':
-      return FileText;
-    case 'exam':
-    case 'quiz':
-    case 'test':
-      return Award;
-    case 'holiday':
-      return PartyPopper;
-    default:
-      return BookOpen;
-  }
-};
-
-const getEventColor = (type) => {
-  switch (type) {
-    case 'assignment':
-      return 'bg-green-500';
-    case 'exam':
-    case 'test':
-      return 'bg-blue-500';
-    case 'quiz':
-      return 'bg-orange-500';
-    case 'holiday':
-      return 'bg-red-500';
-    default:
-      return 'bg-purple-500';
-  }
-};
-
-// ---------------------- Main Component ----------------------
-
 export default function CalendarPage() {
-  const [date, setDate] = useState(new Date('2025-11-01T00:00:00'));
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const [events, setEvents] = useState([]);
 
-  // Combine events and assignments
-  const allEvents = useMemo(() => {
-    const events = getLocalData('events', []);
-    const assignments = getLocalData('assignments', []);
+  useEffect(() => {
+    const updateCalendarEvents = () => {
+      const assignments = getLocalData('assignments', []);
+      const currentDate = new Date();
 
-    return [
-      ...events,
-      ...assignments
+      const formattedEvents = assignments
         .filter((a) => a.status === 'pending')
-        .map((a) => ({
-          id: `assign-${a.id}`,
-          title: a.title,
-          date: a.dueDate,
-          type: 'assignment',
-          courseName: a.courseName,
-          description: a.description,
-        })),
-      ...publicHolidays.map((h) => ({
-        id: `holiday-${h.date}`,
-        title: h.name,
-        date: h.date,
-        type: 'holiday',
-        description: 'Public Holiday',
-      })),
-    ];
+        .map((a) => {
+          const dueDate = new Date(a.dueDate);
+          const isOverdue = currentDate > dueDate;
+          const daysUntilDue = Math.ceil((dueDate - currentDate) / (1000 * 60 * 60 * 24));
+
+          return {
+            id: `assign-${a.id}`,
+            title: `📝 ${a.title}`,
+            start: a.dueDate,
+            end: a.dueDate,
+            backgroundColor: isOverdue ? '#ef4444' : daysUntilDue <= 3 ? '#f97316' : '#22c55e',
+            borderColor: isOverdue ? '#dc2626' : daysUntilDue <= 3 ? '#ea580c' : '#16a34a',
+            textColor: '#ffffff',
+            extendedProps: {
+              type: 'assignment',
+              courseName: a.courseName,
+              description: a.description,
+              status: isOverdue ? 'Overdue' : `Due in ${daysUntilDue} days`,
+              isOverdue,
+              daysUntilDue,
+            },
+          };
+        });
+
+      setEvents(formattedEvents);
+    };
+
+    // Initial update
+    updateCalendarEvents();
+
+    // Set up interval to check for updates every minute
+    const intervalId = setInterval(updateCalendarEvents, 60000);
+
+    return () => clearInterval(intervalId);
   }, []);
 
-  // Compute month/day events and calendar modifiers
-  const { monthEvents, selectedDayEvents, modifiers, modifierClassNames } = useMemo(() => {
-    const currentMonth = date.getMonth();
-    const currentYear = date.getFullYear();
+  const getEventColor = (type) => {
+    switch (type) {
+      case 'assignment':
+        return '#22c55e';
+      case 'exam':
+      case 'test':
+        return '#3b82f6';
+      case 'quiz':
+        return '#f97316';
+      case 'holiday':
+        return '#ef4444';
+      default:
+        return '#a855f7';
+    }
+  };
 
-    const monthEvents = allEvents.filter((e) => {
-      const eventDate = parseLocalDate(e.date);
-      return eventDate.getMonth() === currentMonth && eventDate.getFullYear() === currentYear;
+  const handleEventClick = (clickInfo) => {
+    setSelectedEvent({
+      ...clickInfo.event.extendedProps,
+      title: clickInfo.event.title,
     });
-
-    const selectedDateStr = date.toDateString();
-    const selectedDayEvents = allEvents.filter(
-      (e) => parseLocalDate(e.date).toDateString() === selectedDateStr
-    );
-
-    const modifiers = {
-      assignment: allEvents.filter((e) => e.type === 'assignment').map((e) => parseLocalDate(e.date)),
-      test: allEvents
-        .filter((e) => ['test', 'exam', 'quiz'].includes(e.type))
-        .map((e) => parseLocalDate(e.date)),
-      event: allEvents
-        .filter((e) => !['assignment', 'test', 'exam', 'quiz', 'holiday'].includes(e.type))
-        .map((e) => parseLocalDate(e.date)),
-      holiday: allEvents.filter((e) => e.type === 'holiday').map((e) => parseLocalDate(e.date)),
-    };
-
-    const modifierClassNames = {
-      assignment: 'bg-green-500/20 text-green-700 font-bold',
-      test: 'bg-blue-500/20 text-blue-700 font-bold',
-      event: 'bg-purple-500/20 text-purple-700 font-bold',
-      holiday: 'bg-red-500/20 text-red-700 font-bold',
-    };
-
-    return { monthEvents, selectedDayEvents, modifiers, modifierClassNames };
-  }, [date, allEvents]);
-
-  // ---------------------- UI ----------------------
+  };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
+    <div className="space-y-6 p-4">
       <div>
         <h1 className="text-3xl font-bold">Calendar</h1>
         <p className="text-muted-foreground mt-1">Track your assignments, exams, and events</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Calendar Section */}
-        <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="lg:col-span-2">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <CalendarIcon className="h-5 w-5 text-primary" />
-                Academic Calendar
-              </CardTitle>
-              <CardDescription>Click on a date to see events</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <UiCalendar
-                mode="single"
-                selected={date}
-                onSelect={setDate}
-                month={date}
-                onMonthChange={setDate}
-                className="rounded-md border w-full"
-                modifiers={modifiers}
-                modifiersClassNames={modifierClassNames}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="calendar-container"
+      >
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex justify-between items-center">
+              <span>Academic Calendar</span>
+              <div className="flex gap-2 text-sm">
+                <span className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded-full bg-[#ef4444]"></div> Overdue
+                </span>
+                <span className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded-full bg-[#f97316]"></div> Due Soon
+                </span>
+                <span className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded-full bg-[#22c55e]"></div> Upcoming
+                </span>
+              </div>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[700px]">
+              <FullCalendar
+                plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+                headerToolbar={{
+                  left: 'prev,next today',
+                  center: 'title',
+                  right: 'dayGridMonth,timeGridWeek,timeGridDay',
+                }}
+                initialView="dayGridMonth"
+                events={events}
+                eventClick={handleEventClick}
+                height="100%"
+                eventTimeFormat={{
+                  hour: 'numeric',
+                  minute: '2-digit',
+                  meridiem: 'short',
+                }}
+                dayMaxEvents={true}
+                slotMinTime="08:00:00"
+                slotMaxTime="20:00:00"
+                eventDidMount={(info) => {
+                  // Add tooltip with more details
+                  const tooltip = `
+                    ${info.event.title}
+                    ${info.event.extendedProps.courseName}
+                    ${info.event.extendedProps.status}
+                  `;
+                  info.el.setAttribute('title', tooltip);
+                }}
               />
-            </CardContent>
-          </Card>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
 
-          {/* Monthly Events */}
-          <Card className="mt-6">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <CalendarIcon className="h-5 w-5 text-primary" />
-                Events in {date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-              </CardTitle>
-              <CardDescription>{monthEvents.length} events scheduled</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3 max-h-[400px] overflow-y-auto">
-              {monthEvents.length > 0 ? (
-                monthEvents
-                  .sort((a, b) => parseLocalDate(a.date) - parseLocalDate(b.date))
-                  .map((event) => {
-                    const Icon = getEventIcon(event.type);
-                    return (
-                      <div
-                        key={event.id}
-                        className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted cursor-pointer transition-colors"
-                        onClick={() => {
-                          setSelectedEvent(event);
-                          setDate(parseLocalDate(event.date));
-                        }}
-                      >
-                        <div className={`${getEventColor(event.type)} p-2 rounded-lg flex-shrink-0`}>
-                          <Icon className="h-4 w-4 text-white" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm truncate">{event.title}</p>
-                          <p className="text-xs text-muted-foreground truncate">
-                            {event.courseName || event.description}
-                          </p>
-                        </div>
-                        <span className="text-xs text-muted-foreground flex-shrink-0">
-                          {parseLocalDate(event.date).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                          })}
-                        </span>
-                      </div>
-                    );
-                  })
-              ) : (
-                <p className="text-sm text-muted-foreground text-center py-8">No events this month</p>
-              )}
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        {/* Sidebar Section */}
-        <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
-          {/* Color Legend */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Color Legend</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {colorLegend.map((item, index) => (
-                <div key={index} className="flex items-center gap-3">
-                  <div className={`${item.color} w-4 h-4 rounded`} />
-                  <span className="text-sm text-foreground">{item.label}</span>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-
-          {/* Events for Selected Day */}
-          <Card className="sticky top-6">
-            <CardHeader>
-              <CardTitle>
-                Events on {date.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
-              </CardTitle>
-              <CardDescription>
-                {selectedDayEvents.length} {selectedDayEvents.length === 1 ? 'event' : 'events'}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {selectedDayEvents.length > 0 ? (
-                selectedDayEvents.map((event) => {
-                  const Icon = getEventIcon(event.type);
-                  return (
-                    <div
-                      key={event.id}
-                      className="p-3 rounded-lg bg-muted/50 hover:bg-muted cursor-pointer transition-colors border"
-                      onClick={() => setSelectedEvent(event)}
-                    >
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className={`${getEventColor(event.type)} p-1.5 rounded`}>
-                          <Icon className="h-3 w-3 text-white" />
-                        </div>
-                        <p className="font-medium text-sm">{event.title}</p>
-                      </div>
-                      <p className="text-xs text-muted-foreground">{event.courseName || event.description}</p>
-                    </div>
-                  );
-                })
-              ) : (
-                <p className="text-sm text-muted-foreground text-center py-8">
-                  No events scheduled for this date.
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        </motion.div>
-      </div>
-
-      {/* Event Detail Dialog */}
       {selectedEvent && (
         <Dialog open={!!selectedEvent} onOpenChange={() => setSelectedEvent(null)}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>{selectedEvent.title}</DialogTitle>
-              <DialogDescription>
-                {parseLocalDate(selectedEvent.date).toLocaleDateString('en-US', {
-                  weekday: 'long',
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric',
-                })}
-              </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
-              <div>
-                <p className="text-sm font-medium mb-1">Type</p>
+              <div className="flex items-center gap-2">
                 <span
-                  className={`${getEventColor(
-                    selectedEvent.type
-                  )} text-white px-3 py-1 rounded-full text-xs capitalize`}
+                  className={`px-3 py-1 rounded-full text-xs text-white ${selectedEvent.isOverdue
+                      ? 'bg-red-500'
+                      : selectedEvent.daysUntilDue <= 3
+                        ? 'bg-orange-500'
+                        : 'bg-green-500'
+                    }`}
                 >
-                  {selectedEvent.type}
+                  {selectedEvent.status}
                 </span>
               </div>
-              {selectedEvent.courseName && (
+              <div>
+                <p className="text-sm font-medium mb-1">Course</p>
+                <p className="text-sm text-muted-foreground">{selectedEvent.courseName}</p>
+              </div>
+              {selectedEvent.description && (
                 <div>
-                  <p className="text-sm font-medium mb-1">Course</p>
-                  <p className="text-sm text-muted-foreground">{selectedEvent.courseName}</p>
+                  <p className="text-sm font-medium mb-1">Description</p>
+                  <p className="text-sm text-muted-foreground">{selectedEvent.description}</p>
                 </div>
               )}
-              <div>
-                <p className="text-sm font-medium mb-1">Description</p>
-                <p className="text-sm text-muted-foreground">{selectedEvent.description}</p>
-              </div>
             </div>
           </DialogContent>
         </Dialog>
       )}
+
+      <style jsx global>{`
+        .fc {
+          --fc-border-color: #e5e7eb;
+          --fc-button-bg-color: #f3f4f6;
+          --fc-button-border-color: #e5e7eb;
+          --fc-button-text-color: #374151;
+          --fc-button-hover-bg-color: #e5e7eb;
+          --fc-button-hover-border-color: #d1d5db;
+          --fc-button-active-bg-color: #d1d5db;
+          --fc-button-active-border-color: #9ca3af;
+        }
+        .fc .fc-button {
+          padding: 0.5rem 1rem;
+          font-size: 0.875rem;
+          border-radius: 0.375rem;
+        }
+        .fc .fc-button-primary:not(:disabled).fc-button-active,
+        .fc .fc-button-primary:not(:disabled):active {
+          background-color: var(--fc-button-active-bg-color);
+          border-color: var(--fc-button-active-border-color);
+        }
+        .fc-theme-standard td,
+        .fc-theme-standard th {
+          border-color: var(--fc-border-color);
+        }
+        .fc-day-today {
+          background-color: #f8fafc !important;
+        }
+        .fc-event {
+          border-radius: 4px;
+          border: none;
+          padding: 2px 4px;
+          font-size: 0.875rem;
+        }
+      `}</style>
     </div>
   );
 }
