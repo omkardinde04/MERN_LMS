@@ -14,6 +14,7 @@ import { X } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from '@/components/ui/alert-dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export default function AssignmentsPage() {
     const [assignments, setAssignments] = useState(getLocalData('facultyAssignments', []));
@@ -36,6 +37,13 @@ export default function AssignmentsPage() {
     const [feedback, setFeedback] = useState('');
     const [isPlagiarismChecking, setIsPlagiarismChecking] = useState(false);
     const [plagiarismReport, setPlagiarismReport] = useState(null);
+    const [availableCourses, setAvailableCourses] = useState([]);
+
+    // Load available courses when component mounts
+    useEffect(() => {
+        const courses = getLocalData('courses', []);
+        setAvailableCourses(courses);
+    }, []);
 
     // keep assignmentSubmissions in sync with localStorage (storage event + periodic poll)
     useEffect(() => {
@@ -165,7 +173,7 @@ export default function AssignmentsPage() {
 
     const handleCreateAssignment = (e) => {
         e && e.preventDefault && e.preventDefault();
-        if (!newTitle.trim() || !newCourse.trim() || !newDueDate) {
+        if (!newTitle.trim() || !newCourse || !newDueDate) {
             toast.error('Please provide title, course and due date');
             return;
         }
@@ -544,9 +552,26 @@ export default function AssignmentsPage() {
                             <Label htmlFor="a-title">Title</Label>
                             <Input id="a-title" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} required />
                         </div>
-                        <div>
-                            <Label htmlFor="a-course">Course</Label>
-                            <Input id="a-course" value={newCourse} onChange={(e) => setNewCourse(e.target.value)} required />
+                        <div className="space-y-2">
+                            <Label>Course</Label>
+                            {availableCourses.length > 0 ? (
+                                <Select value={newCourse} onValueChange={setNewCourse}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select a course" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {availableCourses.map((course) => (
+                                            <SelectItem key={course.id} value={course.name}>
+                                                {course.name} ({course.code})
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            ) : (
+                                <div className="text-sm text-muted-foreground p-2 border rounded-md">
+                                    No courses available. Please create a course first.
+                                </div>
+                            )}
                         </div>
                         <div>
                             <Label htmlFor="a-due">Due Date</Label>
