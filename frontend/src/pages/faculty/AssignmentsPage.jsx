@@ -14,9 +14,15 @@ import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 
 export default function AssignmentsPage() {
-    const assignments = getLocalData('facultyAssignments', []);
+    const [assignments, setAssignments] = useState(getLocalData('facultyAssignments', []));
     const assignmentSubmissions = getLocalData('assignmentSubmissions', {});
     const [selectedAssignment, setSelectedAssignment] = useState(null);
+    // create assignment form state
+    const [newTitle, setNewTitle] = useState('');
+    const [newCourse, setNewCourse] = useState('');
+    const [newDueDate, setNewDueDate] = useState('');
+    const [newDescription, setNewDescription] = useState('');
+    const [newTotalMarks, setNewTotalMarks] = useState('');
     const [selectedSubmission, setSelectedSubmission] = useState(null);
     const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
     const [isSubmissionsDialogOpen, setIsSubmissionsDialogOpen] = useState(false);
@@ -70,7 +76,7 @@ export default function AssignmentsPage() {
     const handlePlagiarismCheck = async (submission) => {
         setIsPlagiarismChecking(true);
         setPlagiarismReport(null);
-        
+
         // Simulate API call to plagiarism checker
         setTimeout(() => {
             const mockReport = {
@@ -123,8 +129,53 @@ export default function AssignmentsPage() {
         const totalStudents = 45; // This should come from course enrollment
         const pending = totalStudents - submitted;
         const percentage = totalStudents > 0 ? (submitted / totalStudents) * 100 : 0;
-        
+
         return { submitted, pending, totalStudents, percentage };
+    };
+
+    const handleCreateAssignment = (e) => {
+        e && e.preventDefault && e.preventDefault();
+        if (!newTitle.trim() || !newCourse.trim() || !newDueDate) {
+            toast.error('Please provide title, course and due date');
+            return;
+        }
+
+        const id = Date.now();
+        const assignment = {
+            id,
+            title: newTitle.trim(),
+            course: newCourse.trim(),
+            dueDate: new Date(newDueDate).toISOString(),
+            description: newDescription.trim(),
+            totalMarks: newTotalMarks ? Number(newTotalMarks) : 100,
+        };
+
+        // save to facultyAssignments (for faculty UI)
+        const updatedFaculty = [assignment, ...assignments];
+        setAssignments(updatedFaculty);
+        setLocalData('facultyAssignments', updatedFaculty);
+
+        // also save to shared 'assignments' so student views / calendar pick it up
+        const shared = getLocalData('assignments', []);
+        const sharedItem = {
+            id,
+            title: assignment.title,
+            dueDate: assignment.dueDate,
+            status: 'pending',
+            courseName: assignment.course,
+            description: assignment.description,
+            totalMarks: assignment.totalMarks,
+        };
+        setLocalData('assignments', [sharedItem, ...shared]);
+
+        toast.success('Assignment created successfully');
+        // reset form & close
+        setNewTitle('');
+        setNewCourse('');
+        setNewDueDate('');
+        setNewDescription('');
+        setNewTotalMarks('');
+        setIsCreateDialogOpen(false);
     };
 
     return (
@@ -135,7 +186,7 @@ export default function AssignmentsPage() {
                     <h1 className="text-3xl font-bold">Assignments</h1>
                     <p className="text-muted-foreground mt-1">Manage and grade student assignments</p>
                 </div>
-                <Button 
+                <Button
                     className="bg-yellow-500 hover:bg-yellow-600 text-black font-semibold"
                     onClick={() => setIsCreateDialogOpen(true)}
                 >
@@ -149,7 +200,7 @@ export default function AssignmentsPage() {
                 {assignments.length > 0 ? (
                     assignments.map((assignment, index) => {
                         const stats = getSubmissionStats(assignment.id);
-                        
+
                         return (
                             <motion.div
                                 key={assignment.id}
@@ -164,7 +215,7 @@ export default function AssignmentsPage() {
                                                 <h3 className="text-xl font-bold mb-1">{assignment.title}</h3>
                                                 <p className="text-sm text-muted-foreground">{assignment.course}</p>
                                             </div>
-                                            <Button 
+                                            <Button
                                                 variant="outline"
                                                 size="sm"
                                                 onClick={() => handleViewSubmissions(assignment)}
@@ -195,7 +246,7 @@ export default function AssignmentsPage() {
                                                 <span className="font-medium">{Math.round(stats.percentage)}% Complete</span>
                                             </div>
                                             <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-                                                <div 
+                                                <div
                                                     className="h-full bg-yellow-500 transition-all duration-500"
                                                     style={{ width: `${stats.percentage}%` }}
                                                 />
@@ -265,23 +316,23 @@ export default function AssignmentsPage() {
                                         </TableCell>
                                         <TableCell>
                                             <div className="flex items-center justify-end gap-2">
-                                                <Button 
-                                                    size="sm" 
+                                                <Button
+                                                    size="sm"
                                                     variant="outline"
                                                     onClick={() => handlePreview(submission)}
                                                 >
                                                     <Eye className="h-3 w-3 mr-1" />
                                                     Preview
                                                 </Button>
-                                                <Button 
-                                                    size="sm" 
+                                                <Button
+                                                    size="sm"
                                                     variant="outline"
                                                     onClick={() => handleDownload(submission)}
                                                 >
                                                     <Download className="h-3 w-3" />
                                                 </Button>
-                                                <Button 
-                                                    size="sm" 
+                                                <Button
+                                                    size="sm"
                                                     variant="default"
                                                     onClick={() => handleGrade(submission)}
                                                 >
@@ -312,16 +363,16 @@ export default function AssignmentsPage() {
                                 <p className="text-sm text-muted-foreground">Submitted: {selectedSubmission && new Date(selectedSubmission.submittedAt).toLocaleString()}</p>
                             </div>
                             <div className="flex gap-2">
-                                <Button 
-                                    variant="outline" 
+                                <Button
+                                    variant="outline"
                                     size="sm"
                                     onClick={() => handleDownload(selectedSubmission)}
                                 >
                                     <Download className="h-4 w-4 mr-1" />
                                     Download
                                 </Button>
-                                <Button 
-                                    variant="outline" 
+                                <Button
+                                    variant="outline"
                                     size="sm"
                                     onClick={() => handlePlagiarismCheck(selectedSubmission)}
                                     disabled={isPlagiarismChecking}
@@ -341,8 +392,8 @@ export default function AssignmentsPage() {
                                             <FileCheck className="h-4 w-4" />
                                             Plagiarism Report
                                         </div>
-                                        <Button 
-                                            size="sm" 
+                                        <Button
+                                            size="sm"
                                             variant="outline"
                                             onClick={handleSendPlagiarismReport}
                                         >
@@ -443,10 +494,32 @@ This analysis covers the fundamental aspects of network protocols including TCP/
                         <DialogTitle>Create New Assignment</DialogTitle>
                         <DialogDescription>Upload a new assignment for students</DialogDescription>
                     </DialogHeader>
-                    <div className="text-center py-8 text-muted-foreground">
-                        <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                        <p>Assignment creation form would be here</p>
-                    </div>
+                    <form onSubmit={handleCreateAssignment} className="space-y-4 py-2">
+                        <div>
+                            <Label htmlFor="a-title">Title</Label>
+                            <Input id="a-title" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} required />
+                        </div>
+                        <div>
+                            <Label htmlFor="a-course">Course</Label>
+                            <Input id="a-course" value={newCourse} onChange={(e) => setNewCourse(e.target.value)} required />
+                        </div>
+                        <div>
+                            <Label htmlFor="a-due">Due Date</Label>
+                            <Input id="a-due" type="date" value={newDueDate} onChange={(e) => setNewDueDate(e.target.value)} required />
+                        </div>
+                        <div>
+                            <Label htmlFor="a-marks">Total Marks</Label>
+                            <Input id="a-marks" type="number" min={1} value={newTotalMarks} onChange={(e) => setNewTotalMarks(e.target.value)} />
+                        </div>
+                        <div>
+                            <Label htmlFor="a-desc">Description</Label>
+                            <Textarea id="a-desc" value={newDescription} onChange={(e) => setNewDescription(e.target.value)} rows={4} />
+                        </div>
+                        <div className="flex justify-end gap-2">
+                            <Button variant="outline" type="button" onClick={() => setIsCreateDialogOpen(false)}>Cancel</Button>
+                            <Button type="submit">Create Assignment</Button>
+                        </div>
+                    </form>
                 </DialogContent>
             </Dialog>
         </div>

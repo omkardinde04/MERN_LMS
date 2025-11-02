@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { getLocalData, setLocalData, getUser } from '@/utils/storage';
 import { Plus, Edit, Trash2, Users, BookOpen, Clock, Link as LinkIcon, Video, Bell, ArrowLeft, Copy, ExternalLink, Search, Laptop, GraduationCap } from 'lucide-react';
@@ -67,6 +67,10 @@ export default function CoursesPage() {
                 ...formData,
                 students: 0,
                 progress: 0,
+                createdBy: user?.id || null,
+                createdByName: user?.fullName || 'Unknown',
+                ownerRole: user?.role || 'faculty',
+                createdAt: new Date().toISOString(),
             };
             const updatedCourses = [...courses, newCourse];
             setCourses(updatedCourses);
@@ -234,6 +238,10 @@ export default function CoursesPage() {
             toast.error('Please enter a meeting title');
         }
     };
+
+    const user = getUser();
+    // allow common faculty/instructor/admin role names (case-insensitive)
+    const canCreate = !!user && ['faculty', 'teacher', 'instructor', 'professor', 'admin'].includes((user.role || '').toLowerCase());
 
     if (selectedCourse) {
         const courseStudents = getCourseStudents(selectedCourse.id);
@@ -476,170 +484,190 @@ export default function CoursesPage() {
                             className="pl-9 w-64"
                         />
                     </div>
-                    <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                        <DialogTrigger asChild>
-                            <Button 
+                    {/* Only faculty/instructors/admin can create courses */}
+                    {canCreate ? (
+                        <>
+                            <Button
                                 className="bg-yellow-500 hover:bg-yellow-600 text-black font-semibold"
                                 onClick={() => {
                                     setEditingCourse(null);
                                     setFormData({ name: '', code: '', description: '', semester: '', credits: '', class: '', totalStudents: '' });
+                                    setIsDialogOpen(true);
                                 }}
                             >
                                 <Plus className="h-4 w-4 mr-2" />
                                 Create Course
                             </Button>
-                        </DialogTrigger>
-                    <DialogContent>
-                        <DialogHeader>
-                            <DialogTitle>{editingCourse ? 'Edit Course' : 'Add New Course'}</DialogTitle>
-                            <DialogDescription>
-                                {editingCourse ? 'Update course information' : 'Create a new course'}
-                            </DialogDescription>
-                        </DialogHeader>
-                        <form onSubmit={handleSubmit} className="space-y-4">
-                            <div>
-                                <Label htmlFor="name">Course Name</Label>
-                                <Input
-                                    id="name"
-                                    name="name"
-                                    value={formData.name}
-                                    onChange={handleInputChange}
-                                    placeholder="e.g., Introduction to Computer Science"
-                                    required
-                                />
-                            </div>
-                            <div>
-                                <Label htmlFor="code">Course Code</Label>
-                                <Input
-                                    id="code"
-                                    name="code"
-                                    value={formData.code}
-                                    onChange={handleInputChange}
-                                    placeholder="e.g., CS101"
-                                    required
-                                />
-                            </div>
-                            <div>
-                                <Label htmlFor="semester">Semester</Label>
-                                <Input
-                                    id="semester"
-                                    name="semester"
-                                    value={formData.semester}
-                                    onChange={handleInputChange}
-                                    placeholder="e.g., Fall 2024"
-                                />
-                            </div>
-                            <div>
-                                <Label htmlFor="credits">Credits</Label>
-                                <Input
-                                    id="credits"
-                                    name="credits"
-                                    type="number"
-                                    value={formData.credits}
-                                    onChange={handleInputChange}
-                                    placeholder="e.g., 3"
-                                />
-                            </div>
-                            <div>
-                                <Label htmlFor="class">Class/Section</Label>
-                                <Input
-                                    id="class"
-                                    name="class"
-                                    value={formData.class}
-                                    onChange={handleInputChange}
-                                    placeholder="e.g., TY-C1"
-                                />
-                            </div>
-                            <div>
-                                <Label htmlFor="totalStudents">Total Students</Label>
-                                <Input
-                                    id="totalStudents"
-                                    name="totalStudents"
-                                    type="number"
-                                    value={formData.totalStudents}
-                                    onChange={handleInputChange}
-                                    placeholder="e.g., 60"
-                                />
-                            </div>
-                            <div>
-                                <Label htmlFor="description">Description</Label>
-                                <Textarea
-                                    id="description"
-                                    name="description"
-                                    value={formData.description}
-                                    onChange={handleInputChange}
-                                    placeholder="Course description..."
-                                    rows={3}
-                                />
-                            </div>
-                            <div className="flex justify-end gap-2">
-                                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                                    Cancel
-                                </Button>
-                                <Button type="submit">
-                                    {editingCourse ? 'Update' : 'Create'}
-                                </Button>
-                            </div>
-                        </form>
-                    </DialogContent>
-                </Dialog>
+
+                            <Dialog
+                                open={isDialogOpen}
+                                onOpenChange={(open) => {
+                                    setIsDialogOpen(open);
+                                    if (!open) {
+                                        setEditingCourse(null);
+                                    }
+                                }}
+                            >
+                                <DialogContent>
+                                    <DialogHeader>
+                                        <DialogTitle>{editingCourse ? 'Edit Course' : 'Add New Course'}</DialogTitle>
+                                        <DialogDescription>
+                                            {editingCourse ? 'Update course information' : 'Create a new course'}
+                                        </DialogDescription>
+                                    </DialogHeader>
+                                    <form onSubmit={handleSubmit} className="space-y-4">
+                                        <div>
+                                            <Label htmlFor="name">Course Name</Label>
+                                            <Input
+                                                id="name"
+                                                name="name"
+                                                value={formData.name}
+                                                onChange={handleInputChange}
+                                                placeholder="e.g., Introduction to Computer Science"
+                                                required
+                                            />
+                                        </div>
+                                        <div>
+                                            <Label htmlFor="code">Course Code</Label>
+                                            <Input
+                                                id="code"
+                                                name="code"
+                                                value={formData.code}
+                                                onChange={handleInputChange}
+                                                placeholder="e.g., CS101"
+                                                required
+                                            />
+                                        </div>
+                                        <div>
+                                            <Label htmlFor="semester">Semester</Label>
+                                            <Input
+                                                id="semester"
+                                                name="semester"
+                                                value={formData.semester}
+                                                onChange={handleInputChange}
+                                                placeholder="e.g., Fall 2024"
+                                            />
+                                        </div>
+                                        <div>
+                                            <Label htmlFor="credits">Credits</Label>
+                                            <Input
+                                                id="credits"
+                                                name="credits"
+                                                type="number"
+                                                value={formData.credits}
+                                                onChange={handleInputChange}
+                                                placeholder="e.g., 3"
+                                            />
+                                        </div>
+                                        <div>
+                                            <Label htmlFor="class">Class/Section</Label>
+                                            <Input
+                                                id="class"
+                                                name="class"
+                                                value={formData.class}
+                                                onChange={handleInputChange}
+                                                placeholder="e.g., TY-C1"
+                                            />
+                                        </div>
+                                        <div>
+                                            <Label htmlFor="totalStudents">Total Students</Label>
+                                            <Input
+                                                id="totalStudents"
+                                                name="totalStudents"
+                                                type="number"
+                                                value={formData.totalStudents}
+                                                onChange={handleInputChange}
+                                                placeholder="e.g., 60"
+                                            />
+                                        </div>
+                                        <div>
+                                            <Label htmlFor="description">Description</Label>
+                                            <Textarea
+                                                id="description"
+                                                name="description"
+                                                value={formData.description}
+                                                onChange={handleInputChange}
+                                                placeholder="Course description..."
+                                                rows={3}
+                                            />
+                                        </div>
+                                        <div className="flex justify-end gap-2">
+                                            <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                                                Cancel
+                                            </Button>
+                                            <Button type="submit">
+                                                {editingCourse ? 'Update' : 'Create'}
+                                            </Button>
+                                        </div>
+                                    </form>
+                                </DialogContent>
+                            </Dialog>
+                        </>
+                    ) : (
+                        <Button variant="outline" disabled title="Only faculty/instructors can create courses">
+                            <Plus className="h-4 w-4 mr-2" />
+                            Create Course
+                        </Button>
+                    )}
+                </div>
             </div>
-        </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {courses
-                    .filter(course => 
-                        !searchQuery || 
+                    .filter(course =>
+                        !searchQuery ||
                         course.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                         course.code?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                         course.class?.toLowerCase().includes(searchQuery.toLowerCase())
                     )
                     .map((course, index) => (
-                    <motion.div
-                        key={course.id}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.1 }}
-                    >
-                        <Card className="hover:shadow-lg transition-shadow cursor-pointer relative bg-card border-border" onClick={() => setSelectedCourse(course)}>
-                            {/* Delete button positioned at top right */}
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="absolute top-3 right-3 h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    openDeleteDialog(course, e);
-                                }}
-                            >
-                                <Trash2 className="h-4 w-4" />
-                            </Button>
-                            
-                            <CardHeader className="pb-3">
-                                <div className="flex items-start gap-4">
-                                    <div className="p-3 bg-primary/10 rounded-lg">
-                                        <Laptop className="h-6 w-6 text-primary" />
+                        <motion.div
+                            key={course.id}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: index * 0.1 }}
+                        >
+                            <Card className="hover:shadow-lg transition-shadow cursor-pointer relative bg-card border-border" onClick={() => setSelectedCourse(course)}>
+                                {/* Delete button positioned at top right */}
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="absolute top-3 right-3 h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        openDeleteDialog(course, e);
+                                    }}
+                                >
+                                    <Trash2 className="h-4 w-4" />
+                                </Button>
+
+                                <CardHeader className="pb-3">
+                                    <div className="flex items-start gap-4">
+                                        <div className="p-3 bg-primary/10 rounded-lg">
+                                            <Laptop className="h-6 w-6 text-primary" />
+                                        </div>
+                                        <div className="flex-1">
+                                            <CardTitle className="text-lg mb-1">{course.name}</CardTitle>
+                                            <CardDescription className="text-xs">
+                                                Prof. {course.createdByName || getUser()?.fullName || 'Unknown'}
+                                            </CardDescription>
+                                            <CardDescription className="text-xs mt-0.5">{course.code}</CardDescription>
+                                        </div>
                                     </div>
-                                    <div className="flex-1">
-                                        <CardTitle className="text-lg mb-1">{course.name}</CardTitle>
-                                        <CardDescription className="text-xs">Prof. {getUser()?.fullName || 'Unknown'}</CardDescription>
-                                        <CardDescription className="text-xs mt-0.5">{course.code}</CardDescription>
+                                </CardHeader>
+                                <CardContent className="space-y-3 pt-0">
+                                    <div className="flex items-center gap-2 text-sm text-yellow-600 dark:text-yellow-500">
+                                        <GraduationCap className="h-4 w-4" />
+                                        <span className="font-medium">{course.class || 'N/A'}</span>
                                     </div>
-                                </div>
-                            </CardHeader>
-                            <CardContent className="space-y-3 pt-0">
-                                <div className="flex items-center gap-2 text-sm text-yellow-600 dark:text-yellow-500">
-                                    <GraduationCap className="h-4 w-4" />
-                                    <span className="font-medium">{course.class || 'N/A'}</span>
-                                </div>
-                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                    <Users className="h-4 w-4" />
-                                    <span>{course.students || 0} Students Enrolled</span>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </motion.div>
-                ))}
+                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                        <Users className="h-4 w-4" />
+                                        <span>{course.students || 0} Students Enrolled</span>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </motion.div>
+                    ))}
             </div>
 
             {courses.length === 0 && (
@@ -649,7 +677,7 @@ export default function CoursesPage() {
                     <p className="text-muted-foreground mb-4">
                         Get started by creating your first course
                     </p>
-                    <Button onClick={() => setIsDialogOpen(true)}>
+                    <Button onClick={() => canCreate ? setIsDialogOpen(true) : toast.error('Only faculty/instructors can create courses')}>
                         <Plus className="h-4 w-4 mr-2" />
                         Add Your First Course
                     </Button>
