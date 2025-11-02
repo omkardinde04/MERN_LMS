@@ -1,34 +1,37 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import FullCalendar from '@fullcalendar/react';
-import dayGridPlugin from '@fullcalendar/daygrid';
-import timeGridPlugin from '@fullcalendar/timegrid';
-import interactionPlugin from '@fullcalendar/interaction';
+// removed FullCalendar and plugin imports to avoid build errors
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { getLocalData } from '@/utils/storage';
 
 export default function CalendarPage() {
   const [selectedEvent, setSelectedEvent] = useState(null);
-  const [events, setEvents] = useState([]);
+  const [eventsByDate, setEventsByDate] = useState({});
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
 
   useEffect(() => {
     const updateCalendarEvents = () => {
       const assignments = getLocalData('assignments', []);
       const currentDate = new Date();
 
-      const formattedEvents = assignments
+      // map events to yyyy-mm-dd keys
+      const map = {};
+      assignments
         .filter((a) => a.status === 'pending')
-        .map((a) => {
-          const dueDate = new Date(a.dueDate);
-          const isOverdue = currentDate > dueDate;
-          const daysUntilDue = Math.ceil((dueDate - currentDate) / (1000 * 60 * 60 * 24));
+        .forEach((a) => {
+          const due = new Date(a.dueDate);
+          const key = due.toISOString().slice(0, 10);
+          const isOverdue = currentDate > due;
+          const daysUntilDue = Math.ceil((due - currentDate) / (1000 * 60 * 60 * 24));
 
-          return {
+          const evt = {
             id: `assign-${a.id}`,
-            title: `📝 ${a.title}`,
-            start: a.dueDate,
-            end: a.dueDate,
+            title: a.title,
+            dateKey: key,
             backgroundColor: isOverdue ? '#ef4444' : daysUntilDue <= 3 ? '#f97316' : '#22c55e',
             borderColor: isOverdue ? '#dc2626' : daysUntilDue <= 3 ? '#ea580c' : '#16a34a',
             textColor: '#ffffff',
@@ -39,42 +42,94 @@ export default function CalendarPage() {
               status: isOverdue ? 'Overdue' : `Due in ${daysUntilDue} days`,
               isOverdue,
               daysUntilDue,
+              raw: a,
             },
           };
+
+          if (!map[key]) map[key] = [];
+          map[key].push(evt);
         });
 
-      setEvents(formattedEvents);
+      // --- NEW: load public holidays (from local storage if provided, otherwise defaults for current year) ---
+      const year = currentDate.getFullYear();
+      const defaultHolidays = [
+        { id: 'ny', name: "New Year's Day", date: `${year}-01-01`, description: "New Year's Day" },
+        { id: 'indep', name: 'Independence Day', date: `${year}-07-04`, description: 'Independence Day' },
+        { id: 'labor', name: "Labor Day", date: (() => { // first Monday in Sept
+            const d = new Date(year, 8, 1);
+            while (d.getDay() !== 1) d.setDate(d.getDate() + 1);
+            return d.toISOString().slice(0,10);
+          })(), description: 'Labor Day' },
+        { id: 'xmas', name: 'Christmas Day', date: `${year}-12-25`, description: 'Christmas Day' },
+      ];
+      const storedHolidays = getLocalData('holidays', null);
+      const holidays = Array.isArray(storedHolidays) ? storedHolidays : defaultHolidays;
+
+      holidays.forEach((h, idx) => {
+        // ensure date string YYYY-MM-DD
+        const key = (h.date || '').slice(0,10);
+        if (!key) return;
+        const evt = {
+          id: `holiday-${h.id ?? idx}`,
+          title: `🎉 ${h.name}`,
+          dateKey: key,
+          backgroundColor: '#3b82f6', // blue for holidays
+          borderColor: '#2563eb',
+          textColor: '#ffffff',
+          extendedProps: {
+            type: 'holiday',
+            courseName: '',
+            description: h.description || h.name,
+            status: 'Public Holiday',
+            isHoliday: true,
+            raw: h,
+          },
+        };
+        if (!map[key]) map[key] = [];
+        // ensure holidays appear first in the day's list
+        map[key].unshift(evt);
+      });
+      // --- END NEW ---
+
+      setEventsByDate(map);
     };
 
-    // Initial update
     updateCalendarEvents();
-
-    // Set up interval to check for updates every minute
     const intervalId = setInterval(updateCalendarEvents, 60000);
-
     return () => clearInterval(intervalId);
   }, []);
 
-  const getEventColor = (type) => {
-    switch (type) {
-      case 'assignment':
-        return '#22c55e';
-      case 'exam':
-      case 'test':
-        return '#3b82f6';
-      case 'quiz':
-        return '#f97316';
-      case 'holiday':
-        return '#ef4444';
-      default:
-        return '#a855f7';
+  const startOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+  const endOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
+  const startDayIndex = startOfMonth.getDay(); // 0 (Sun) - 6 (Sat)
+  const totalDays = endOfMonth.getDate();
+
+  const cells = [];
+  // build 6 weeks grid (42 cells)
+  for (let i = 0; i < 42; i++) {
+    const dayNumber = i - startDayIndex + 1;
+    let cellDate = null;
+    if (dayNumber > 0 && dayNumber <= totalDays) {
+      cellDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), dayNumber);
     }
+    cells.push(cellDate);
+  }
+
+  const formatKey = (d) => d.toISOString().slice(0, 10);
+
+  const handlePrev = () =>
+    setCurrentMonth((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1));
+  const handleNext = () =>
+    setCurrentMonth((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1));
+  const handleToday = () => {
+    const now = new Date();
+    setCurrentMonth(new Date(now.getFullYear(), now.getMonth(), 1));
   };
 
-  const handleEventClick = (clickInfo) => {
+  const handleEventClick = (evt) => {
     setSelectedEvent({
-      ...clickInfo.event.extendedProps,
-      title: clickInfo.event.title,
+      ...evt.extendedProps,
+      title: evt.title,
     });
   };
 
@@ -104,40 +159,69 @@ export default function CalendarPage() {
                 <span className="flex items-center gap-1">
                   <div className="w-3 h-3 rounded-full bg-[#22c55e]"></div> Upcoming
                 </span>
+                {/* --- NEW: Holiday legend item --- */}
+                <span className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded-full bg-[#3b82f6]"></div> Holiday
+                </span>
+                {/* --- END NEW --- */}
               </div>
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-[700px]">
-              <FullCalendar
-                plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-                headerToolbar={{
-                  left: 'prev,next today',
-                  center: 'title',
-                  right: 'dayGridMonth,timeGridWeek,timeGridDay',
-                }}
-                initialView="dayGridMonth"
-                events={events}
-                eventClick={handleEventClick}
-                height="100%"
-                eventTimeFormat={{
-                  hour: 'numeric',
-                  minute: '2-digit',
-                  meridiem: 'short',
-                }}
-                dayMaxEvents={true}
-                slotMinTime="08:00:00"
-                slotMaxTime="20:00:00"
-                eventDidMount={(info) => {
-                  // Add tooltip with more details
-                  const tooltip = `
-                    ${info.event.title}
-                    ${info.event.extendedProps.courseName}
-                    ${info.event.extendedProps.status}
-                  `;
-                  info.el.setAttribute('title', tooltip);
-                }}
-              />
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <button className="px-3 py-1 rounded border" onClick={handlePrev}>Prev</button>
+                <button className="px-3 py-1 rounded border" onClick={handleToday}>Today</button>
+                <button className="px-3 py-1 rounded border" onClick={handleNext}>Next</button>
+              </div>
+              <div className="text-sm font-medium">
+                {currentMonth.toLocaleString(undefined, { month: 'long', year: 'numeric' })}
+              </div>
+            </div>
+
+            <div className="calendar-grid">
+              <div className="calendar-weekdays">
+                {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((d) => (
+                  <div key={d} className="weekday">{d}</div>
+                ))}
+              </div>
+
+              <div className="calendar-cells">
+                {cells.map((cellDate, idx) => {
+                  if (!cellDate) {
+                    return <div key={idx} className="cell empty"></div>;
+                  }
+                  const key = formatKey(cellDate);
+                  const cellEvents = eventsByDate[key] || [];
+                  const isToday = formatKey(new Date()) === key;
+                  return (
+                    <div key={idx} className={`cell ${isToday ? 'today' : ''}`}>
+                      <div className="cell-header">
+                        <span className="day-number">{cellDate.getDate()}</span>
+                      </div>
+                      <div className="cell-events">
+                        {cellEvents.slice(0, 3).map((evt) => (
+                          <button
+                            key={evt.id}
+                            className="event-badge"
+                            style={{ backgroundColor: evt.backgroundColor, color: evt.textColor }}
+                            title={`${evt.title} — ${evt.extendedProps.courseName} — ${evt.extendedProps.status}`}
+                            onClick={() => handleEventClick(evt)}
+                          >
+                            {evt.title}
+                          </button>
+                        ))}
+                        {cellEvents.length > 3 && (
+                          <div className="more-count">+{cellEvents.length - 3} more</div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="mt-4 text-xs text-muted-foreground">
+              Click an event to view details.
             </div>
           </CardContent>
         </Card>
@@ -178,39 +262,21 @@ export default function CalendarPage() {
       )}
 
       <style jsx global>{`
-        .fc {
-          --fc-border-color: #e5e7eb;
-          --fc-button-bg-color: #f3f4f6;
-          --fc-button-border-color: #e5e7eb;
-          --fc-button-text-color: #374151;
-          --fc-button-hover-bg-color: #e5e7eb;
-          --fc-button-hover-border-color: #d1d5db;
-          --fc-button-active-bg-color: #d1d5db;
-          --fc-button-active-border-color: #9ca3af;
-        }
-        .fc .fc-button {
-          padding: 0.5rem 1rem;
-          font-size: 0.875rem;
-          border-radius: 0.375rem;
-        }
-        .fc .fc-button-primary:not(:disabled).fc-button-active,
-        .fc .fc-button-primary:not(:disabled):active {
-          background-color: var(--fc-button-active-bg-color);
-          border-color: var(--fc-button-active-border-color);
-        }
-        .fc-theme-standard td,
-        .fc-theme-standard th {
-          border-color: var(--fc-border-color);
-        }
-        .fc-day-today {
-          background-color: #f8fafc !important;
-        }
-        .fc-event {
-          border-radius: 4px;
-          border: none;
-          padding: 2px 4px;
-          font-size: 0.875rem;
-        }
+        .calendar-container { width: 100%; }
+        .calendar-grid { display: flex; flex-direction: column; gap: 8px; }
+        .calendar-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); }
+        .weekday { text-align: center; font-size: 0.875rem; color: #6b7280; padding: 6px 0; }
+        .calendar-cells { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+        .cell { min-height: 96px; border: 1px solid #e5e7eb; border-radius: 6px; padding: 6px; background: var(--card) }
+        .cell.empty { background: transparent; border: none; }
+        .cell.today { background: #f8fafc; border-color: #c7d2fe; }
+        .cell-header { display:flex; justify-content:flex-end; }
+        .day-number { font-size: 0.75rem; color: #374151; }
+        .cell-events { display:flex; flex-direction:column; gap:4px; margin-top:6px; }
+        .event-badge { text-align:left; padding:4px 6px; border-radius:4px; font-size:0.75rem; border:none; cursor:pointer; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .more-count { font-size: 0.7rem; color:#6b7280; }
+        /* keep some of the original styles for consistency */
+        .text-muted-foreground { color: #6b7280; }
       `}</style>
     </div>
   );
