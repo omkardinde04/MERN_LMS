@@ -9,7 +9,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { getLocalData, setLocalData } from '@/utils/storage';
-import { facultyAPI } from '@/utils/api';
 import { Plus, Eye, Download, Calendar, Users, FileText, Send, FileCheck, Trash2 } from 'lucide-react';
 import { X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -48,21 +47,62 @@ export default function AssignmentsPage() {
 
     // keep assignmentSubmissions in sync with localStorage (storage event + periodic poll)
     useEffect(() => {
+        let lastSyncTime = 0;
+        let isSyncing = false;
+        
         const sync = () => {
-            setAssignmentSubmissions(getLocalData('assignmentSubmissions', {}));
+            if (isSyncing) return; // Prevent concurrent syncs
+            
+            try {
+                isSyncing = true;
+                const now = Date.now();
+                // Prevent too frequent syncs (debounce)
+                if (now - lastSyncTime < 300) {
+                    isSyncing = false;
+                    return;
+                }
+                lastSyncTime = now;
+                
+                const newData = getLocalData('assignmentSubmissions', {});
+                console.log('👨‍🏫 Faculty: Syncing submissions...', newData);
+                setAssignmentSubmissions(newData);
+                
+                isSyncing = false;
+            } catch (err) {
+                console.error('❌ Faculty sync failed:', err);
+                isSyncing = false;
+            }
         };
+        
         // initial sync
+        console.log('🚀 Faculty: Initializing submission sync...');
         sync();
 
         const onStorage = (e) => {
             if (!e.key || e.key.startsWith('assignmentSubmissions') || e.key === 'assignmentSubmissions_lastUpdate') {
+                console.log('📡 Faculty: Storage event detected:', e.key);
                 sync();
             }
         };
+        
+        // custom same-tab event listener
+        const onLocalDataChanged = (e) => {
+            const key = e?.detail?.key;
+            if (key === 'assignmentSubmissions') {
+                console.log('📡 Faculty: Custom event detected:', key);
+                sync();
+            }
+        };
+        
         window.addEventListener('storage', onStorage);
-        const interval = setInterval(sync, 2000); // poll so SPA updates in same tab
+        window.addEventListener('local-data-changed', onLocalDataChanged);
+        
+        // Faster polling for real-time updates (1.5s)
+        const interval = setInterval(sync, 1500);
+        
         return () => {
             window.removeEventListener('storage', onStorage);
+            window.removeEventListener('local-data-changed', onLocalDataChanged);
             clearInterval(interval);
         };
     }, []);
@@ -88,7 +128,6 @@ export default function AssignmentsPage() {
         setIsGradingDialogOpen(false);
         setMarks('');
         setFeedback('');
-        setPlagiarismReport(null);
         setSelectedSubmission(null);
     };
 
@@ -143,70 +182,51 @@ export default function AssignmentsPage() {
         setSelectedSubmission(submission);
         setMarks(submission.marks || '');
         setFeedback(submission.feedback || '');
-        // Preserve plagiarism report if it exists
-        if (submission.plagiarismReport) {
-            setPlagiarismReport(submission.plagiarismReport);
-        }
         setIsGradingDialogOpen(true);
     };
 
-    const handleSubmitGrade = async () => {
+    const handleSubmitGrade = () => {
         if (!marks) {
             toast.error('Please enter marks');
             return;
         }
 
-        if (!selectedSubmission?._id || !selectedSubmission?.id) {
-            toast.error('Submission ID not found');
-            return;
-        }
-
         try {
-            // Submit grade to backend
-            const submissionId = selectedSubmission._id || selectedSubmission.id;
-            const gradeData = {
-                score: Number(marks),
-                feedback: feedback || '',
-                plagiarismReport: plagiarismReport ? {
-                    similarity: plagiarismReport.similarity,
-                    sources: plagiarismReport.sources || []
-                } : null,
-                plagiarismReportUrl: plagiarismReport ? plagiarismReport.url : null
-            };
+            const subs = getLocalData('assignmentSubmissions', {});
+            const arr = subs[selectedAssignment.id] || [];
+            const idx = arr.findIndex(s => s.id === selectedSubmission.id);
 
-            const response = await facultyAPI.gradeSubmission(submissionId, gradeData);
-
-            if (response.success) {
-                // Update local storage for immediate UI update (backward compatibility)
-                try {
-                    const subs = getLocalData('assignmentSubmissions', {});
-                    const arr = subs[selectedAssignment.id] || [];
-                    const idx = arr.findIndex(s => (s.id || s._id) === (selectedSubmission.id || selectedSubmission._id));
-
-                    if (idx !== -1) {
-                        arr[idx] = {
-                            ...arr[idx],
-                            marks: Number(marks),
-                            feedback: feedback || '',
-                            plagiarismReport: plagiarismReport,
-                            gradedAt: new Date().toISOString()
-                        };
-                        subs[selectedAssignment.id] = arr;
-                        setLocalData('assignmentSubmissions', subs);
-                        setAssignmentSubmissions(getLocalData('assignmentSubmissions', {}));
-                    }
-                } catch (e) {
-                    console.warn('Failed to update local storage:', e);
-                }
-
-                toast.success(`Marks (${marks}) sent to ${selectedSubmission.studentName || 'student'}`);
+            if (idx === -1) {
+                toast.error('Submission not found');
                 handleCloseGrading();
-            } else {
-                throw new Error(response.message || 'Failed to submit grade');
+                return;
             }
+
+            // update submission with marks/feedback
+            arr[idx] = {
+                ...arr[idx],
+                marks: Number(marks),
+                feedback: feedback || '',
+                gradedAt: new Date().toISOString()
+            };
+            subs[selectedAssignment.id] = arr;
+            setLocalData('assignmentSubmissions', subs);
+
+            // update local state so faculty UI refreshes immediately
+            setAssignmentSubmissions(getLocalData('assignmentSubmissions', {}));
+
+            // notify other tabs (native storage event via helper key)
+            try { window.localStorage.setItem('assignmentSubmissions_lastUpdate', String(Date.now())); } catch (e) {}
+
+            // dispatch custom same-tab event for immediate updates
+            try { window.dispatchEvent(new CustomEvent('local-data-changed', { detail: { key: 'assignmentSubmissions' } })); } catch (e) {}
+
+            toast.success(`Marks (${marks}) sent to ${selectedSubmission.studentName}`);
         } catch (err) {
             console.error('grading error', err);
-            toast.error(`Failed to send marks: ${err.message || 'Unknown error'}`);
+            toast.error('Failed to send marks');
+        } finally {
+            handleCloseGrading();
         }
     };
 
@@ -619,29 +639,9 @@ export default function AssignmentsPage() {
                             <Label htmlFor="feedback">Feedback (Optional)</Label>
                             <Textarea id="feedback" placeholder="Add feedback for the student..." rows={4} value={feedback} onChange={(e) => setFeedback(e.target.value)} />
                         </div>
-                        
-                        {/* Plagiarism Report Section */}
-                        {plagiarismReport && (
-                            <div className="p-3 bg-orange-50 dark:bg-orange-950/20 rounded-lg border border-orange-200 dark:border-orange-800">
-                                <div className="flex items-center justify-between mb-2">
-                                    <div className="flex items-center gap-2">
-                                        <FileCheck className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-                                        <Label className="text-sm font-semibold">Plagiarism Report Available</Label>
-                                    </div>
-                                    <Badge className={plagiarismReport.similarity > 25 ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-green-500/10 text-green-500 border-green-500/20'}>
-                                        {plagiarismReport.similarity}% Similarity
-                                    </Badge>
-                                </div>
-                                <p className="text-xs text-muted-foreground">This report will be sent to the student with the grade.</p>
-                            </div>
-                        )}
-                        
                         <div className="flex items-center justify-between pt-2">
                             <Button variant="outline" onClick={handleCloseGrading}>Cancel</Button>
-                            <Button onClick={handleSubmitGrade}>
-                                <Send className="h-4 w-4 mr-2" /> 
-                                Send Grade{plagiarismReport ? ' & Report' : ''}
-                            </Button>
+                            <Button onClick={handleSubmitGrade}><Send className="h-4 w-4 mr-2" /> Send Marks</Button>
                         </div>
                     </div>
                 </DialogContent>
