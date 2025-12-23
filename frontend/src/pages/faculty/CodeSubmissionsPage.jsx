@@ -75,7 +75,7 @@ export default function CodeSubmissionsPage() {
             console.error('[CodeSubmissionsPage] Socket.io error:', error);
             // Continue without socket - not critical for basic functionality
         }
-    }, [user]);
+    }, [user?.token]);
 
     // Filter submissions based on search term
     const filteredSubmissions = Array.isArray(submissions)
